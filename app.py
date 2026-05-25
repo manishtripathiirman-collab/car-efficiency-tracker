@@ -23,7 +23,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- VISUAL HERO IMAGE (ECOSPORT AT THE PUMP) ---
-# High-quality public image showcasing a modern car at a fueling station
 st.image(
     "https://images.unsplash.com/photo-1527018601619-a508a2be00cd?auto=format&fit=crop&w=800&q=80", 
     caption="🚙 EcoSport Garage Status: Active",
@@ -109,70 +108,8 @@ st.markdown("### ⛽ Step 2: Verify & Log Details")
 with st.container(border=True):
     form_col1, form_col2 = st.columns(2)
     with form_col1:
-        log_date = st.date_input("Date of Fill-up", value=datetime.today())
+        log_date = st.date_input("Date of Fill-up", value=datetime.today(), key="log_date_main")
         odometer = st.number_input("Current Odometer Reading (km)", min_value=0, step=1)
     with form_col2:
         liters = st.number_input("Liters of Petrol Filled", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
-        price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
-    
-    st.markdown("**Additional Checks at Pump:**")
-    col_chk1, col_chk2 = st.columns(2)
-    with col_chk1:
-        air_filled = st.checkbox("💨 Air filled today?", value=False)
-    with col_chk2:
-        had_service = st.checkbox("🔧 Was vehicle serviced today?", value=False)
-    
-    service_date_str = "-"
-    if had_service:
-        service_date = st.date_input("Confirm Service Date", value=datetime.today())
-        service_date_str = service_date.strftime("%Y-%m-%d")
-
-    if st.button("Save Entry", use_container_width=True, type="primary"):
-        if odometer > 0 and liters > 0 and price > 0:
-            new_entry = {
-                "Date": log_date.strftime("%Y-%m-%d"),
-                "Odometer (km)": odometer,
-                "Liters": liters,
-                "Cost (₹)": price,
-                "Air Filled": "Yes" if air_filled else "No",
-                "Last Service Date": service_date_str
-            }
-            st.session_state.fuel_logs.append(new_entry)
-            st.success("Log added successfully!")
-            st.rerun()
-        else:
-            st.error("Please provide valid data inputs across all fields.")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# --- 6. VISUAL ANALYTICS CHART ---
-if len(df) >= 2:
-    st.markdown("### 📈 Efficiency Trend (km/L over time)")
-    chart_data = df.dropna(subset=['km/L']).set_index('Date')
-    st.line_chart(chart_data['km/L'], color="#3B82F6")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# --- 7. MOBILE-FRIENDLY EDIT & DELETE PANEL ---
-st.markdown("### 🛠️ Step 3: Edit or Delete Old Entries")
-with st.container(border=True):
-    if len(st.session_state.fuel_logs) > 0:
-        log_options = [f"#{i+1} | {log['Date']} | {log['Odometer (km)']} km" for i, log in enumerate(st.session_state.fuel_logs)]
-        selected_option = st.selectbox("Select a log entry to modify:", log_options)
-        
-        selected_index = log_options.index(selected_option)
-        target_log = st.session_state.fuel_logs[selected_index]
-        
-        with st.expander("📝 Modify Selected Entry Details"):
-            edit_date = st.date_input("Edit Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"))
-            edit_odo = st.number_input("Edit Odometer (km)", min_value=0, value=int(target_log["Odometer (km)"]))
-            edit_liters = st.number_input("Edit Liters", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
-            edit_cost = st.number_input("Edit Cost (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
-            
-            edit_air = st.checkbox("Edit Air Status (Checked = Yes)", value=(target_log.get("Air Filled", "No") == "Yes"))
-            edit_srv_check = st.checkbox("Edit Service Status (Checked = Serviced)", value=(target_log.get("Last Service Date", "-") != "-"))
-            
-            edit_srv_date_str = "-"
-            if edit_srv_check:
-                current_srv_val = target_log.get("Last Service Date", "-")
-                default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current
+        price = st.number_input("Total Bill Amount (₹)",
