@@ -5,36 +5,48 @@ from PIL import Image
 import json
 import os
 
-# We import the official Google GenAI library
+# Ensure the Google GenAI library is present
 try:
     from google import genai
 except ImportError:
-    st.error("Please run 'pip install google-genai' in your terminal!")
+    st.error("Please ensure 'google-genai' is listed in your requirements.txt file!")
 
+st.set_page_config(page_title="Smart Car Tracker", page_icon="🚗", layout="centered")
 st.title("🚗 Smart Car Tracker")
 
-# --- 1. MEMORY STORAGE ---
+# --- 1. INITIALIZE APP MEMORY ---
 if "fuel_logs" not in st.session_state:
+    # Pre-populating with a couple of starter logs so the math dashboard renders immediately
     st.session_state.fuel_logs = [
         {"Date": "2026-05-01", "Odometer (km)": 45000, "Liters": 40.0, "Cost (₹)": 3800.0},
         {"Date": "2026-05-12", "Odometer (km)": 45550, "Liters": 42.5, "Cost (₹)": 4030.0},
     ]
 
+# Build our working DataFrame from memory
 df = pd.DataFrame(st.session_state.fuel_logs)
 
-# --- 2. ROLLING MATH ENGINE ---
+# --- 2. THE ROLLING MATH ENGINE ---
 if len(df) >= 2:
+    # Always keep rows ordered by odometer progression for accurate rolling calculations
     df = df.sort_values("Odometer (km)").reset_index(drop=True)
+    
+    # Calculate difference between current and previous odometer readings
     df['Distance Driven (km)'] = df['Odometer (km)'].diff()
+    
+    # Calculate Efficiency: km driven divided by liters consumed
     df['km/L'] = df['Distance Driven (km)'] / df['Liters']
+    
+    # Totals for aggregate metrics
     total_tracked_km = df['Distance Driven (km)'].sum()
     total_money_spent = df['Cost (₹)'].sum()
+    
+    # Avoid first row for calculations since its distance driven is unknown
     avg_mileage = total_tracked_km / df['Liters'].iloc[1:].sum()
     cost_per_km = total_money_spent / total_tracked_km
 else:
     avg_mileage, cost_per_km = 0.0, 0.0
 
-# --- 3. METRICS ---
+# --- 3. PERFORMANCE METRICS DASHBOARD ---
 st.markdown("### 📊 Live Averages")
 col_m1, col_m2 = st.columns(2)
 with col_m1:
@@ -47,32 +59,33 @@ st.markdown("---")
 # --- 4. LIVE AI BILL SCANNER ENGINE ---
 st.subheader("📷 Step 1: Scan Bill")
 
-# Create a place to paste your free Google API Key safely right in the app UI
+# Secure entry point for your personal API key
 api_key = st.text_input("Paste your Gemini API Key here:", type="password")
-st.caption("Get a free key instantly from Google AI Studio if you don't have one.")
+st.caption("Generate a free personal API key securely via aistudio.google.com")
 
-uploaded_bill = st.file_input("Take a photo or upload your petrol receipt bill", type=["jpg", "jpeg", "png"])
+# FIXED: Changed from st.file_input to st.file_uploader to activate mobile cameras correctly
+uploaded_bill = st.file_uploader("Take a photo or upload your petrol receipt bill", type=["jpg", "jpeg", "png"])
 
 scanned_liters = 0.0
 scanned_price = 0.0
 
 if uploaded_bill is not None:
     img = Image.open(uploaded_bill)
-    st.image(img, caption="Receipt Preview", width=200)
+    st.image(img, caption="Receipt Preview", width=240)
     
     if not api_key:
-        st.warning("⚠️ Please enter your Gemini API Key above to read this bill.")
+        st.warning("⚠️ Please provide a Gemini API Key above to begin reading this receipt automatically.")
     else:
-        st.info("⚡ AI is reading your receipt lines...")
+        st.info("⚡ AI is scanning receipt strings...")
         try:
-            # Initialize the live Google Vision client
+            # Initialize live Google GenAI Client
             client = genai.Client(api_key=api_key)
             
-            # Instruct the AI to find specific data points and format them cleanly as JSON
+            # Formulate strict parsing instruction
             prompt = """
-            Look at this fuel receipt image. Extract the total volume of fuel/petrol filled in liters and the total bill amount paid in Rupees. 
-            Return the output strictly as a clean JSON object with keys "liters" and "total_cost". 
-            Example output format: {"liters": 35.4, "total_cost": 3400.0}
+            Examine this fuel receipt image carefully. Extract the total volume of fuel/petrol filled in liters and the absolute total cost paid in Rupees. 
+            Return the output strictly formatted as a single JSON object containing only keys "liters" and "total_cost".
+            Example output format: {"liters": 38.5, "total_cost": 3650.0}
             """
             
             response = client.models.generate_content(
@@ -80,48 +93,11 @@ if uploaded_bill is not None:
                 contents=[img, prompt]
             )
             
-            # Clean up and parse the text answer back into numbers
+            # Clean formatting blocks and pull valid dictionary values
             cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned_text)
             
             scanned_liters = float(data.get("liters", 0.0))
             scanned_price = float(data.get("total_cost", 0.0))
             
-            st.success(f"🤖 Scanner Success! Found: {scanned_liters}L | ₹ {scanned_price}")
-            
-        except Exception as e:
-            st.error(f"Error reading bill: {e}")
-
-st.markdown("---")
-
-# --- 5. LOGGING FORM ---
-st.subheader("⛽ Step 2: Verify & Log Details")
-form_col1, form_col2 = st.columns(2)
-
-with form_col1:
-    log_date = st.date_input("Date of Fill-up", value=datetime.today())
-    odometer = st.number_input("Current Odometer Reading (km)", min_value=0, step=1)
-
-with form_col2:
-    # Form fields automatically latch onto whatever the AI model extracted!
-    liters = st.number_input("Liters of Petrol Filled", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
-    price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
-
-if st.button("Save Entry", use_container_width=True):
-    if odometer > 0 and liters > 0 and price > 0:
-        new_entry = {
-            "Date": log_date.strftime("%Y-%m-%d"),
-            "Odometer (km)": odometer,
-            "Liters": liters,
-            "Cost (₹)": price
-        }
-        st.session_state.fuel_logs.append(new_entry)
-        st.success("Entry recorded successfully!")
-        st.rerun()
-    else:
-        st.error("Please enter valid numbers before saving.")
-
-# --- 6. HISTORY LOG ---
-st.markdown("---")
-st.subheader("📋 Saved Entries Log")
-st.dataframe(df, use_container_width=True, hide_index=True)
+            st.success(
