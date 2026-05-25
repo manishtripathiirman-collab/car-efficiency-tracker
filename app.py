@@ -14,17 +14,16 @@ except ImportError:
 # Set up page configuration
 st.set_page_config(page_title="Smart Car Tracker", page_icon="⚡", layout="centered")
 
-# --- CUSTOM APPLICATION HEADER ---
+# --- CUSTOM APPLICATION HEADER (MOBILE OPTIMIZED) ---
 st.markdown("""
-    <div style='background: linear-gradient(135deg, #1E3A8A, #3B82F6); padding: 25px; border-radius: 12px; margin-bottom: 25px; text-align: center; color: white;'>
-        <h1 style='margin: 0; font-size: 2.2rem; font-weight: 700;'>⚡ Smart Car Tracker</h1>
-        <p style='margin: 5px 0 0 0; opacity: 0.9; font-size: 1rem;'>AI-Powered Fuel Analytics & Efficiency Dashboard</p>
+    <div style='background: linear-gradient(135deg, #1E3A8A, #3B82F6); padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: white;'>
+        <h2 style='margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.5px;'>⚡ Smart Car Tracker</h2>
+        <p style='margin: 2px 0 0 0; opacity: 0.85; font-size: 0.8rem;'>AI Fuel Analytics & Maintenance Logbook</p>
     </div>
 """, unsafe_allow_html=True)
 
-# --- 1. INITIALIZE APP MEMORY (CLEAN SLATE) ---
+# --- 1. INITIALIZE APP MEMORY ---
 if "fuel_logs" not in st.session_state:
-    # CLEANED: Removed the dummy starter logs so it starts completely fresh
     st.session_state.fuel_logs = []
 
 # Build working DataFrame
@@ -95,7 +94,7 @@ with st.container(border=True):
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 5. VEHICLE LOG ENTRY FORM ---
+# --- 5. VEHICLE LOG ENTRY FORM WITH INTEGRATED CHECKS ---
 st.markdown("### ⛽ Step 2: Verify & Log Details")
 with st.container(border=True):
     form_col1, form_col2 = st.columns(2)
@@ -105,10 +104,30 @@ with st.container(border=True):
     with form_col2:
         liters = st.number_input("Liters of Petrol Filled", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
         price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
+    
+    st.markdown("**Additional Checks at Pump:**")
+    col_chk1, col_chk2 = st.columns(2)
+    with col_chk1:
+        air_filled = st.checkbox("💨 Air filled today?", value=False)
+    with col_chk2:
+        had_service = st.checkbox("🔧 Was vehicle serviced today?", value=False)
+    
+    # Conditional date field that only displays if the user clicks the service checkbox
+    service_date_str = "-"
+    if had_service:
+        service_date = st.date_input("Confirm Service Date", value=datetime.today())
+        service_date_str = service_date.strftime("%Y-%m-%d")
 
     if st.button("Save Entry", use_container_width=True, type="primary"):
         if odometer > 0 and liters > 0 and price > 0:
-            new_entry = {"Date": log_date.strftime("%Y-%m-%d"), "Odometer (km)": odometer, "Liters": liters, "Cost (₹)": price}
+            new_entry = {
+                "Date": log_date.strftime("%Y-%m-%d"),
+                "Odometer (km)": odometer,
+                "Liters": liters,
+                "Cost (₹)": price,
+                "Air Filled": "Yes" if air_filled else "No",
+                "Last Service Date": service_date_str
+            }
             st.session_state.fuel_logs.append(new_entry)
             st.success("Log added successfully!")
             st.rerun()
@@ -141,23 +160,31 @@ with st.container(border=True):
             edit_liters = st.number_input("Edit Liters", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
             edit_cost = st.number_input("Edit Cost (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
             
+            # Carry adjustments back to maintenance tags if needed
+            edit_air = st.checkbox("Edit Air Status (Checked = Yes)", value=(target_log.get("Air Filled", "No") == "Yes"))
+            edit_srv_check = st.checkbox("Edit Service Status (Checked = Serviced)", value=(target_log.get("Last Service Date", "-") != "-"))
+            
+            edit_srv_date_str = "-"
+            if edit_srv_check:
+                current_srv_val = target_log.get("Last Service Date", "-")
+                default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current_srv_val, "%Y-%m-%d")
+                edit_srv_date = st.date_input("Adjust Service Date", value=default_srv_date)
+                edit_srv_date_str = edit_srv_date.strftime("%Y-%m-%d")
+
             col_ed1, col_ed2 = st.columns(2)
             with col_ed1:
                 if st.button("💾 Save Changes", use_container_width=True):
-                    st.session_state.fuel_logs[selected_index] = {"Date": edit_date.strftime("%Y-%m-%d"), "Odometer (km)": edit_odo, "Liters": edit_liters, "Cost (₹)": edit_cost}
+                    st.session_state.fuel_logs[selected_index] = {
+                        "Date": edit_date.strftime("%Y-%m-%d"),
+                        "Odometer (km)": edit_odo,
+                        "Liters": edit_liters,
+                        "Cost (₹)": edit_cost,
+                        "Air Filled": "Yes" if edit_air else "No",
+                        "Last Service Date": edit_srv_date_str
+                    }
                     st.success("Changes saved!")
                     st.rerun()
             with col_ed2:
                 if st.button("🗑️ Delete Entry Permanently", use_container_width=True):
                     st.session_state.fuel_logs.pop(selected_index)
-                    st.warning("Entry deleted successfully.")
-                    st.rerun()
-    else:
-        st.info("No logs stored to modify yet.")
-
-# --- 8. HISTORICAL TRANSACTIONS SHEET ---
-st.markdown("### 📋 Saved Entries Log")
-if len(df) > 0:
-    st.dataframe(df, use_container_width=True, hide_index=True)
-else:
-    st.info("Your logbook is empty. Use Step 1 & Step 2 above to scan and log your first real fuel receipt!")
+                    st.warning("
