@@ -102,4 +102,21 @@ with st.container(border=True):
         log_date = st.date_input("Date of Fill-up", value=datetime.today())
         odometer = st.number_input("Current Odometer Reading (km)", min_value=0, step=1)
     with form_col2:
-        lit
+        liters = st.number_input("Liters of Petrol Filled", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
+        price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
+    
+    st.markdown("**Additional Checks at Pump:**")
+    col_chk1, col_chk2 = st.columns(2)
+    with col_chk1:
+        air_filled = st.checkbox("💨 Air filled today?", value=False)
+    with col_chk2:
+        had_service = st.checkbox("🔧 Was vehicle serviced today?", value=False)
+    
+    # Conditional date field that only displays if the user clicks the service checkbox
+    service_date_str = "-"
+    if had_service:
+        service_date = st.date_input("Confirm Service Date", value=datetime.today())
+        service_date_str = service_date.strftime("%Y-%m-%d")
+
+    if st.button("Save Entry", use_container_width=True, type="primary"):
+        if odometer > 0 and liters > 0 and price >
