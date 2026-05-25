@@ -16,7 +16,7 @@ st.title("🚗 Smart Car Tracker")
 
 # --- 1. INITIALIZE APP MEMORY ---
 if "fuel_logs" not in st.session_state:
-    # Pre-populating with a couple of starter logs so the math dashboard renders immediately
+    # Pre-populating with starter logs so the dashboard renders immediately
     st.session_state.fuel_logs = [
         {"Date": "2026-05-01", "Odometer (km)": 45000, "Liters": 40.0, "Cost (₹)": 3800.0},
         {"Date": "2026-05-12", "Odometer (km)": 45550, "Liters": 42.5, "Cost (₹)": 4030.0},
@@ -63,7 +63,7 @@ st.subheader("📷 Step 1: Scan Bill")
 api_key = st.text_input("Paste your Gemini API Key here:", type="password")
 st.caption("Generate a free personal API key securely via aistudio.google.com")
 
-# FIXED: Changed from st.file_input to st.file_uploader to activate mobile cameras correctly
+# Setup the file uploader for image processing
 uploaded_bill = st.file_uploader("Take a photo or upload your petrol receipt bill", type=["jpg", "jpeg", "png"])
 
 scanned_liters = 0.0
@@ -100,4 +100,42 @@ if uploaded_bill is not None:
             scanned_liters = float(data.get("liters", 0.0))
             scanned_price = float(data.get("total_cost", 0.0))
             
-            st.success(
+            # Formatted perfectly with clean closing parentheses
+            st.success(f"🤖 Scanner Success! Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
+            
+        except Exception as e:
+            st.error(f"Error parsing receipt text: {e}")
+
+st.markdown("---")
+
+# --- 5. VEHICLE LOG ENTRY FORM ---
+st.subheader("⛽ Step 2: Verify & Log Details")
+form_col1, form_col2 = st.columns(2)
+
+with form_col1:
+    log_date = st.date_input("Date of Fill-up", value=datetime.today())
+    odometer = st.number_input("Current Odometer Reading (km)", min_value=0, step=1)
+
+with form_col2:
+    # Form elements automatically ingest the values extracted by the vision engine above
+    liters = st.number_input("Liters of Petrol Filled", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
+    price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
+
+if st.button("Save Entry", use_container_width=True):
+    if odometer > 0 and liters > 0 and price > 0:
+        new_entry = {
+            "Date": log_date.strftime("%Y-%m-%d"),
+            "Odometer (km)": odometer,
+            "Liters": liters,
+            "Cost (₹)": price
+        }
+        st.session_state.fuel_logs.append(new_entry)
+        st.success("Log added successfully!")
+        st.rerun()
+    else:
+        st.error("Please provide valid data inputs across all fields before compiling your log entry.")
+
+# --- 6. HISTORICAL TRANSACTIONS SHEET ---
+st.markdown("---")
+st.subheader("📋 Saved Entries Log")
+st.dataframe(df, use_container_width=True, hide_index=True)
