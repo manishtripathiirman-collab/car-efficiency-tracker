@@ -118,4 +118,4 @@ with form_col2:
     price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
 
 if st.button("Save Entry", use_container_width=True):
-    if odometer > 0 and liters
+    if odometer > 0 and liters > 0 and price > 0:
