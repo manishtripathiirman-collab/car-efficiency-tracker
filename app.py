@@ -11,25 +11,32 @@ try:
 except ImportError:
     st.error("Please ensure 'google-genai' is listed in your requirements.txt file!")
 
-# Set up page configuration
+# Set up page configuration with a compact layout
 st.set_page_config(page_title="Smart Car Tracker", page_icon="⚡", layout="centered")
 
-# --- CUSTOM APPLICATION HEADER (MOBILE OPTIMIZED) ---
+# --- UNIFIED BRANDED BANNER ASSET (LEAN & INTEGRATED) ---
+# This single asset replaces the massive block headers with a sleek typography layout
 st.markdown("""
-    <div style='background: linear-gradient(135deg, #1E3A8A, #3B82F6); padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; color: white;'>
-        <h2 style='margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.5px;'>⚡ Smart Car Tracker</h2>
-        <p style='margin: 2px 0 0 0; opacity: 0.85; font-size: 0.8rem;'>AI Fuel Analytics & Maintenance Logbook</p>
+    <div style="
+        background: linear-gradient(rgba(30, 58, 138, 0.85), rgba(59, 130, 246, 0.85)), 
+                    url('https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&w=800&q=80');
+        background-size: cover;
+        background-position: center;
+        padding: 20px 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        text-align: center;
+        color: white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    ">
+        <h2 style='margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: 0.8px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6);'>
+            ⚡ SMART CAR TRACKER
+        </h2>
+        <p style='margin: 4px 0 0 0; opacity: 0.9; font-size: 0.85rem; font-weight: 500; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);'>
+            AI Fuel Analytics & Maintenance Management
+        </p>
     </div>
 """, unsafe_allow_html=True)
-
-# --- VISUAL HERO IMAGE (ECOSPORT AT THE PUMP) ---
-st.image(
-    "https://images.unsplash.com/photo-1527018601619-a508a2be00cd?auto=format&fit=crop&w=800&q=80", 
-    caption="🚙 EcoSport Garage Status: Active",
-    use_container_width=True
-)
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 1. INITIALIZE APP MEMORY ---
 if "fuel_logs" not in st.session_state:
