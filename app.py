@@ -158,33 +158,4 @@ with st.container(border=True):
             edit_date = st.date_input("Edit Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"))
             edit_odo = st.number_input("Edit Odometer (km)", min_value=0, value=int(target_log["Odometer (km)"]))
             edit_liters = st.number_input("Edit Liters", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
-            edit_cost = st.number_input("Edit Cost (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
-            
-            # Carry adjustments back to maintenance tags if needed
-            edit_air = st.checkbox("Edit Air Status (Checked = Yes)", value=(target_log.get("Air Filled", "No") == "Yes"))
-            edit_srv_check = st.checkbox("Edit Service Status (Checked = Serviced)", value=(target_log.get("Last Service Date", "-") != "-"))
-            
-            edit_srv_date_str = "-"
-            if edit_srv_check:
-                current_srv_val = target_log.get("Last Service Date", "-")
-                default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current_srv_val, "%Y-%m-%d")
-                edit_srv_date = st.date_input("Adjust Service Date", value=default_srv_date)
-                edit_srv_date_str = edit_srv_date.strftime("%Y-%m-%d")
-
-            col_ed1, col_ed2 = st.columns(2)
-            with col_ed1:
-                if st.button("💾 Save Changes", use_container_width=True):
-                    st.session_state.fuel_logs[selected_index] = {
-                        "Date": edit_date.strftime("%Y-%m-%d"),
-                        "Odometer (km)": edit_odo,
-                        "Liters": edit_liters,
-                        "Cost (₹)": edit_cost,
-                        "Air Filled": "Yes" if edit_air else "No",
-                        "Last Service Date": edit_srv_date_str
-                    }
-                    st.success("Changes saved!")
-                    st.rerun()
-            with col_ed2:
-                if st.button("🗑️ Delete Entry Permanently", use_container_width=True):
-                    st.session_state.fuel_logs.pop(selected_index)
-                    st.warning("
+            edit_cost = st.number_input("Edit Cost (₹)",
