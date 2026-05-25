@@ -56,32 +56,30 @@ with col_m2:
 
 st.markdown("---")
 
-# --- 4. LIVE AI BILL SCANNER ENGINE ---
+# --- 4. LIVE AUTOMATED AI BILL SCANNER ---
 st.subheader("📷 Step 1: Scan Bill")
 
-# Secure entry point for your personal API key
-api_key = st.text_input("Paste your Gemini API Key here:", type="password")
-st.caption("Generate a free personal API key securely via aistudio.google.com")
-
-# Setup the file uploader for image processing
+# Setup the file uploader for mobile camera image processing
 uploaded_bill = st.file_uploader("Take a photo or upload your petrol receipt bill", type=["jpg", "jpeg", "png"])
 
 scanned_liters = 0.0
 scanned_price = 0.0
+
+# AUTOMATED: Fetching the API Key seamlessly from Streamlit Secrets backend storage
+api_key = st.secrets.get("GEMINI_API_KEY")
 
 if uploaded_bill is not None:
     img = Image.open(uploaded_bill)
     st.image(img, caption="Receipt Preview", width=240)
     
     if not api_key:
-        st.warning("⚠️ Please provide a Gemini API Key above to begin reading this receipt automatically.")
+        st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to your Streamlit Cloud Secrets settings tab.")
     else:
         st.info("⚡ AI is scanning receipt strings...")
         try:
-            # Initialize live Google GenAI Client
+            # Initialize live Google GenAI Client with background secret key
             client = genai.Client(api_key=api_key)
             
-            # Formulate strict parsing instruction
             prompt = """
             Examine this fuel receipt image carefully. Extract the total volume of fuel/petrol filled in liters and the absolute total cost paid in Rupees. 
             Return the output strictly formatted as a single JSON object containing only keys "liters" and "total_cost".
@@ -93,14 +91,12 @@ if uploaded_bill is not None:
                 contents=[img, prompt]
             )
             
-            # Clean formatting blocks and pull valid dictionary values
             cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
             data = json.loads(cleaned_text)
             
             scanned_liters = float(data.get("liters", 0.0))
             scanned_price = float(data.get("total_cost", 0.0))
             
-            # Formatted perfectly with clean closing parentheses
             st.success(f"🤖 Scanner Success! Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
             
         except Exception as e:
@@ -122,20 +118,4 @@ with form_col2:
     price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
 
 if st.button("Save Entry", use_container_width=True):
-    if odometer > 0 and liters > 0 and price > 0:
-        new_entry = {
-            "Date": log_date.strftime("%Y-%m-%d"),
-            "Odometer (km)": odometer,
-            "Liters": liters,
-            "Cost (₹)": price
-        }
-        st.session_state.fuel_logs.append(new_entry)
-        st.success("Log added successfully!")
-        st.rerun()
-    else:
-        st.error("Please provide valid data inputs across all fields before compiling your log entry.")
-
-# --- 6. HISTORICAL TRANSACTIONS SHEET ---
-st.markdown("---")
-st.subheader("📋 Saved Entries Log")
-st.dataframe(df, use_container_width=True, hide_index=True)
+    if odometer > 0 and liters
