@@ -48,50 +48,54 @@ with col_m2:
 
 st.markdown("---")
 
-# --- 4. LIVE AUTOMATED AI BILL SCANNER (FIXED CAMERA ACTIVATION) ---
+# --- 4. LIVE AUTOMATED AI BILL SCANNER (FIXED HARDWARE TRIGGER) ---
 st.subheader("📷 Step 1: Scan Bill")
 
-# FIXED: Wrapped camera inside an interactive expander drawer to block auto-start behavior
-with st.expander("📸 Open Scanner Camera", expanded=False):
-    st.write("Line up your petrol receipt inside the frame below:")
-    uploaded_bill = st.camera_input("Snap a crisp photo of your petrol bill")
+# HARDWARE GATE: A clean checkbox that acts as a strict power switch for the camera hardware
+activate_camera = st.checkbox("Toggle to Turn On Scanner Camera", value=False)
 
 scanned_liters = 0.0
 scanned_price = 0.0
 
 api_key = st.secrets.get("GEMINI_API_KEY")
 
-# Processing logic execution only triggers if an image is actively snapped
-if 'uploaded_bill' in locals() and uploaded_bill is not None:
-    if not api_key:
-        st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to your Streamlit Cloud Secrets settings tab.")
-    else:
-        st.info("⚡ AI is scanning receipt strings...")
-        try:
-            client = genai.Client(api_key=api_key)
-            
-            prompt = """
-            Examine this fuel receipt image carefully. Extract the total volume of fuel/petrol filled in liters and the absolute total cost paid in Rupees. 
-            Return the output strictly formatted as a single JSON object containing only keys "liters" and "total_cost".
-            Example output format: {"liters": 38.5, "total_cost": 3650.0}
-            """
-            
-            img = Image.open(uploaded_bill)
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=[img, prompt]
-            )
-            
-            cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
-            data = json.loads(cleaned_text)
-            
-            scanned_liters = float(data.get("liters", 0.0))
-            scanned_price = float(data.get("total_cost", 0.0))
-            
-            st.success(f"🤖 Scanner Success! Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
-            
-        except Exception as e:
-            st.error(f"Error parsing receipt text: {e}")
+# The camera code will now remain completely non-existent in the browser until checked
+if activate_camera:
+    uploaded_bill = st.camera_input("Snap a crisp photo of your petrol bill")
+
+    if uploaded_bill is not None:
+        img = Image.open(uploaded_bill)
+        
+        if not api_key:
+            st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to your Streamlit Cloud Secrets settings tab.")
+        else:
+            st.info("⚡ AI is scanning receipt strings...")
+            try:
+                client = genai.Client(api_key=api_key)
+                
+                prompt = """
+                Examine this fuel receipt image carefully. Extract the total volume of fuel/petrol filled in liters and the absolute total cost paid in Rupees. 
+                Return the output strictly formatted as a single JSON object containing only keys "liters" and "total_cost".
+                Example output format: {"liters": 38.5, "total_cost": 3650.0}
+                """
+                
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=[img, prompt]
+                )
+                
+                cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
+                data = json.loads(cleaned_text)
+                
+                scanned_liters = float(data.get("liters", 0.0))
+                scanned_price = float(data.get("total_cost", 0.0))
+                
+                st.success(f"🤖 Scanner Success! Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
+                
+            except Exception as e:
+                st.error(f"Error parsing receipt text: {e}")
+else:
+    st.caption("🔒 Camera hardware is currently offline and disconnected.")
 
 st.markdown("---")
 
