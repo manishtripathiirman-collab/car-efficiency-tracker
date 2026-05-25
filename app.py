@@ -26,7 +26,6 @@ df = pd.DataFrame(st.session_state.fuel_logs)
 
 # --- 2. THE ROLLING MATH ENGINE ---
 if len(df) >= 2:
-    # Always keep rows ordered by odometer progression for accurate rolling calculations
     df = df.sort_values("Odometer (km)").reset_index(drop=True)
     df['Distance Driven (km)'] = df['Odometer (km)'].diff()
     df['km/L'] = df['Distance Driven (km)'] / df['Liters']
@@ -49,19 +48,21 @@ with col_m2:
 
 st.markdown("---")
 
-# --- 4. LIVE AUTOMATED AI BILL SCANNER ---
+# --- 4. LIVE AUTOMATED AI BILL SCANNER (FIXED CAMERA ACTIVATION) ---
 st.subheader("📷 Step 1: Scan Bill")
 
-uploaded_bill = st.camera_input("Snap a crisp photo of your petrol bill")
+# FIXED: Wrapped camera inside an interactive expander drawer to block auto-start behavior
+with st.expander("📸 Open Scanner Camera", expanded=False):
+    st.write("Line up your petrol receipt inside the frame below:")
+    uploaded_bill = st.camera_input("Snap a crisp photo of your petrol bill")
 
 scanned_liters = 0.0
 scanned_price = 0.0
 
 api_key = st.secrets.get("GEMINI_API_KEY")
 
-if uploaded_bill is not None:
-    img = Image.open(uploaded_bill)
-    
+# Processing logic execution only triggers if an image is actively snapped
+if 'uploaded_bill' in locals() and uploaded_bill is not None:
     if not api_key:
         st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to your Streamlit Cloud Secrets settings tab.")
     else:
@@ -75,6 +76,7 @@ if uploaded_bill is not None:
             Example output format: {"liters": 38.5, "total_cost": 3650.0}
             """
             
+            img = Image.open(uploaded_bill)
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=[img, prompt]
@@ -119,27 +121,43 @@ if st.button("Save Entry", use_container_width=True):
     else:
         st.error("Please provide valid data inputs across all fields before compiling your log entry.")
 
-# --- 6. INTERACTIVE EDIT SHEET & LOG HISTORY ---
+# --- 6. MOBILE-FRIENDLY EDIT & DELETE PANEL ---
 st.markdown("---")
-st.subheader("📋 Saved Entries Log (Tap cells to Edit/Delete)")
+st.subheader("🛠️ Step 3: Edit or Delete Old Entries")
 
-# We present a highly interactive spreadsheet view to the user
-edited_df = st.data_editor(
-    df, 
-    use_container_width=True, 
-    num_rows="dynamic", # Enables row insertion and deletion buttons seamlessly
-    disabled=["Distance Driven (km)", "km/L"], # Protects mathematical engines from overrides
-    column_config={
-        "Date": st.column_config.TextColumn("Date"),
-        "Odometer (km)": st.column_config.NumberColumn("Odometer (km)", format="%d"),
-        "Liters": st.column_config.NumberColumn("Liters", format="%.2f"),
-        "Cost (₹)": st.column_config.NumberColumn("Cost (₹)", format="₹ %d")
-    }
-)
+if len(st.session_state.fuel_logs) > 0:
+    log_options = [f"#{i+1} | {log['Date']} | {log['Odometer (km)']} km" for i, log in enumerate(st.session_state.fuel_logs)]
+    selected_option = st.selectbox("Select a log entry to modify:", log_options)
+    
+    selected_index = log_options.index(selected_option)
+    target_log = st.session_state.fuel_logs[selected_index]
+    
+    with st.expander("📝 Modify Selected Entry Details"):
+        edit_date = st.date_input("Edit Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"))
+        edit_odo = st.number_input("Edit Odometer (km)", min_value=0, value=int(target_log["Odometer (km)"]))
+        edit_liters = st.number_input("Edit Liters", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
+        edit_cost = st.number_input("Edit Cost (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
+        
+        col_ed1, col_ed2 = st.columns(2)
+        with col_ed1:
+            if st.button("💾 Save Changes", use_container_width=True):
+                st.session_state.fuel_logs[selected_index] = {
+                    "Date": edit_date.strftime("%Y-%m-%d"),
+                    "Odometer (km)": edit_odo,
+                    "Liters": edit_liters,
+                    "Cost (₹)": edit_cost
+                }
+                st.success("Changes saved!")
+                st.rerun()
+        with col_ed2:
+            if st.button("🗑️ Delete Entry Permanently", use_container_width=True):
+                st.session_state.fuel_logs.pop(selected_index)
+                st.warning("Entry deleted successfully.")
+                st.rerun()
+else:
+    st.info("No logs stored to modify yet.")
 
-# If modifications are intercepted inside the interactive worksheet sheet layout
-if not edited_df.equals(df):
-    # Strip operational columns out to clean master logs array tracking structure
-    cleaned_export = edited_df[["Date", "Odometer (km)", "Liters", "Cost (₹)"]]
-    st.session_state.fuel_logs = cleaned_export.to_dict(orient="records")
-    st.rerun()
+# --- 7. HISTORICAL TRANSACTIONS SHEET (READ-ONLY VIEW) ---
+st.markdown("---")
+st.subheader("📋 Saved Entries Log")
+st.dataframe(df, use_container_width=True, hide_index=True)
