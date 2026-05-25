@@ -11,36 +11,75 @@ try:
 except ImportError:
     st.error("Please ensure 'google-genai' is listed in your requirements.txt file!")
 
-# Set up page configuration with premium styling layout
-st.set_page_config(page_title="EcoSport Grand Tracker", page_icon="🏎️", layout="centered")
+# Set up page configuration
+st.set_page_config(page_title="EcoSport Cockpit Pro", page_icon="⚡", layout="centered")
 
-# --- PREMIUM EXECUTIVE BANNER DESIGN ---
+# --- ADVANCED GLOBAL CUSTOM COLOR SCHEME (CSS INJECTION) ---
 st.markdown("""
-    <div style='background: linear-gradient(135deg, #0F172A, #1E293B); padding: 22px 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; border-left: 5px solid #3B82F6;'>
-        <h1 style='margin: 0; font-size: 1.7rem; font-weight: 800; color: #F8FAFC; letter-spacing: 1px;'>🏎️ ECOSPORT EXECUTIVE</h1>
-        <p style='margin: 4px 0 0 0; color: #94A3B8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px;'>AI Intelligence & Fleet Logbook</p>
+    <style>
+        /* Global App Background Override */
+        .stApp {
+            background-color: #0B0F19 !important;
+            color: #E2E8F0 !important;
+        }
+        
+        /* Modernized Custom Cards */
+        div[data-testid="stContainer"] {
+            background-color: #111827 !important;
+            border: 1px solid #1F2937 !important;
+            border-radius: 12px !important;
+            padding: 15px !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
+        }
+        
+        /* Input Field Styling Customizations */
+        div[data-baseweb="input"], div[data-baseweb="select"] {
+            background-color: #1F2937 !important;
+            border: 1px solid #374151 !important;
+            border-radius: 8px !important;
+        }
+        
+        /* Label Typography Enhancements */
+        label, p {
+            color: #94A3B8 !important;
+            font-weight: 500 !important;
+        }
+        
+        /* Premium Accent Headers */
+        h1, h2, h3 {
+            color: #F8FAFC !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.5px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- NEON TECH COCKPIT HEADER BANNER ---
+st.markdown("""
+    <div style='background: linear-gradient(135deg, #1E1B4B, #0F172A); padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center; border: 1px solid #3B82F6; box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);'>
+        <h1 style='margin: 0; font-size: 1.6rem; font-weight: 900; color: #06B6D4; letter-spacing: 1.5px; text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);'>⚡ ECOSPORT COCKPIT PRO</h1>
+        <p style='margin: 4px 0 0 0; color: #94A3B8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 3px;'>Intelligent Dynamic Telemetry & Asset Log</p>
     </div>
 """, unsafe_allow_html=True)
 
-# --- LIVE CAR STATUS BLOCK ---
-with st.container(border=True):
-    col_st1, col_st2 = st.columns([2, 1])
+# --- DYNAMIC VEHICLE HEALTH READOUT ---
+with st.container():
+    col_st1, col_st2 = st.columns([3, 1])
     with col_st1:
-        st.markdown("##### ⚙️ Vehicle Status Monitor")
-        st.caption("System Diagnosis: **Optimal Operational Efficiency**")
+        st.markdown("<p style='margin:0; font-weight:700; color:#F8FAFC !important; font-size:1rem;'>⚙️ Status Telemetry Matrix</p>", unsafe_allow_html=True)
+        st.caption("Core Diagnostics: System online, state memory fully locked.")
     with col_st2:
-        st.markdown("<span style='float:right; background-color:#DCFCE7; color:#166534; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; margin-top: 5px;'>CONNECTED</span>", unsafe_allow_html=True)
+        st.markdown("<span style='float:right; background: linear-gradient(135deg, #06B6D4, #3B82F6); color:#FFFFFF; padding: 5px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.5px; box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);'>CONNECTED</span>", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 1. INITIALIZE APP MEMORY ---
+# --- INITIALIZE APP MEMORY ---
 if "fuel_logs" not in st.session_state:
     st.session_state.fuel_logs = []
 
-# Build working DataFrame
 df = pd.DataFrame(st.session_state.fuel_logs)
 
-# --- 2. THE ROLLING MATH ENGINE ---
+# --- THE ROLLING MATH ENGINE ---
 if len(df) >= 2:
     df = df.sort_values("Odometer (km)").reset_index(drop=True)
     df['Distance Driven (km)'] = df['Odometer (km)'].diff()
@@ -54,41 +93,47 @@ if len(df) >= 2:
 else:
     avg_mileage, cost_per_km = 0.0, 0.0
 
-# --- 3. EXECUTIVE ANALYTICS MATRIX ---
+# --- HIGH-CONTRAST CHROME PERFORMANCE MATRICES ---
 st.markdown("### 📊 Performance Analytics")
 col_card1, col_card2 = st.columns(2)
 
 with col_card1:
-    with st.container(border=True):
-        st.markdown("<p style='margin:0; font-size:0.8rem; color:#64748B; font-weight:600;'>AVERAGE MILEAGE</p>", unsafe_allow_html=True)
-        st.markdown(f"<h2 style='margin:5px 0; color:#3B82F6; font-weight:800;'>{avg_mileage:.2f} <span style='font-size:1rem; font-weight:400; color:#64748B;'>km/L</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style='background-color: #111827; border-left: 4px solid #06B6D4; padding: 15px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);'>
+            <p style='margin:0; font-size:0.75rem; color:#94A3B8; font-weight:600; text-transform:uppercase;'>Average Fuel Mileage</p>
+            <h2 style='margin:5px 0; color:#F8FAFC; font-weight:800; font-size:1.8rem;'>{avg_mileage:.2f} <span style='font-size:0.9rem; color:#06B6D4; font-weight:500;'>km/L</span></h2>
+        </div>
+    """, unsafe_allow_html=True)
         
 with col_card2:
-    with st.container(border=True):
-        st.markdown("<p style='margin:0; font-size:0.8rem; color:#64748B; font-weight:600;'>RUNNING COST</p>", unsafe_allow_html=True)
-        st.markdown(f"<h2 style='margin:5px 0; color:#10B981; font-weight:800;'>₹ {cost_per_km:.2f} <span style='font-size:1rem; font-weight:400; color:#64748B;'>/ km</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style='background-color: #111827; border-left: 4px solid #10B981; padding: 15px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);'>
+            <p style='margin:0; font-size:0.75rem; color:#94A3B8; font-weight:600; text-transform:uppercase;'>Running Cost / KM</p>
+            <h2 style='margin:5px 0; color:#F8FAFC; font-weight:800; font-size:1.8rem;'>₹ {cost_per_km:.2f} <span style='font-size:0.9rem; color:#10B981; font-weight:500;'>/ km</span></h2>
+        </div>
+    """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 4. LIVE AUTOMATED AI BILL SCANNER ---
-st.markdown("### 📷 Phase 1: Optical Receipt Intake")
-with st.container(border=True):
-    activate_camera = st.checkbox("Initialize AI Scanner Lens", value=False)
+# --- AUTOMATED AI BILL SCANNER MODULE ---
+st.markdown("### 📷 Step 1: Optical Receipt Intake")
+with st.container():
+    activate_camera = st.checkbox("Initialize Vision Scanner Lens", value=False)
     
     scanned_liters = 0.0
     scanned_price = 0.0
     api_key = st.secrets.get("GEMINI_API_KEY")
 
     if activate_camera:
-        uploaded_bill = st.camera_input("Position fuel bill inside camera guidelines")
+        uploaded_bill = st.camera_input("Align fuel bill inside lens field")
 
         if uploaded_bill is not None:
             img = Image.open(uploaded_bill)
             
             if not api_key:
-                st.error("⚠️ System Error: 'GEMINI_API_KEY' is missing in server configuration secrets.")
+                st.error("⚠️ App Secret Missing: Configure 'GEMINI_API_KEY'.")
             else:
-                with st.spinner("⚡ Processing receipt layout structure via Gemini Vision AI..."):
+                with st.spinner("⚡ Deciphering receipt telemetry matrix..."):
                     try:
                         client = genai.Client(api_key=api_key)
                         prompt = """
@@ -102,39 +147,39 @@ with st.container(border=True):
                         scanned_liters = float(data.get("liters", 0.0))
                         scanned_price = float(data.get("total_cost", 0.0))
                         
-                        st.success(f"🤖 Extraction Verified: {scanned_liters} Liters | Total Cost: ₹ {scanned_price}")
+                        st.success(f"🤖 Verified: {scanned_liters} Liters | Bill Total: ₹ {scanned_price}")
                     except Exception as e:
                         st.error(f"Error parsing receipt text: {e}")
     else:
-        st.caption("🔒 Scanner telemetry offline. Check box above to initialize camera array.")
+        st.caption("🔒 Scanner array currently idling.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 5. VEHICLE LOG ENTRY FORM WITH INTEGRATED CHECKS ---
-st.markdown("### ⛽ Phase 2: Telemetry Log Entry")
-with st.container(border=True):
+# --- MASTER TELEMETRY FILL FORM ---
+st.markdown("### ⛽ Step 2: Telemetry Log Entry")
+with st.container():
     form_col1, form_col2 = st.columns(2)
     with form_col1:
-        log_date = st.date_input("Log Date Stamping", value=datetime.today(), key="log_date_main")
-        odometer = st.number_input("Current Odometer Track (km)", min_value=0, step=1)
+        log_date = st.date_input("Stamping Date", value=datetime.today(), key="log_date_main")
+        odometer = st.number_input("Odometer Tracker (km)", min_value=0, step=1)
     with form_col2:
-        liters = st.number_input("Fuel Volume Infused (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
-        price = st.number_input("Total Transaction Cost (₹)", min_value=0.0, value=scanned_price, step=10.0)
+        liters = st.number_input("Infused Volume (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
+        price = st.number_input("Transaction Bill Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
     
-    st.markdown("<p style='font-size:0.85rem; font-weight:700; color:#475569; margin-bottom:5px;'>CONCURRENT MAINTENANCE CHECKLIST:</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.8rem; font-weight:700; color:#94A3B8 !important; margin: 10px 0 5px 0; text-transform:uppercase;'>CONCURRENT LOG METRICS:</p>", unsafe_allow_html=True)
     col_chk1, col_chk2 = st.columns(2)
     with col_chk1:
-        air_filled = st.checkbox("💨 Air Pressure Replenished", value=False)
+        air_filled = st.checkbox("💨 Air Pressure Calibrated", value=False)
     with col_chk2:
-        had_service = st.checkbox("🔧 Full Mechanical Service Executed", value=False)
+        had_service = st.checkbox("🔧 Core Mechanical Service Executed", value=False)
     
     service_date_str = "-"
     if had_service:
         service_date = st.date_input("Confirm Service Event Date", value=datetime.today(), key="srv_date_main")
         service_date_str = service_date.strftime("%Y-%m-%d")
 
-    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
-    if st.button("💾 Commit Log to Matrix", use_container_width=True, type="primary"):
+    st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+    if st.button("⚡ Commit Log to Database", use_container_width=True, type="primary"):
         if odometer > 0 and liters > 0 and price > 0:
             new_entry = {
                 "Date": log_date.strftime("%Y-%m-%d"),
@@ -145,61 +190,59 @@ with st.container(border=True):
                 "Last Service Date": service_date_str
             }
             st.session_state.fuel_logs.append(new_entry)
-            st.success("Log successfully compiled into storage matrix!")
+            st.success("Entry securely logged!")
             st.rerun()
         else:
-            st.error("Validation Error: Please fill in all mechanical readings before saving.")
+            st.error("Validation Halt: Ensure all core fields are set above zero.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 6. VISUAL ANALYTICS CHART ---
+# --- VISUAL ANALYTICS CURVE ---
 if len(df) >= 2:
     st.markdown("### 📈 Efficiency Velocity Curve")
     chart_data = df.dropna(subset=['km/L']).set_index('Date')
-    st.line_chart(chart_data['km/L'], color="#3B82F6")
+    st.line_chart(chart_data['km/L'], color="#06B6D4")
     st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 7. HISTORICAL TRANSACTIONS SHEET ---
-st.markdown("### 📋 Historic Fleet Ledger Sheets")
+# --- HISTORICAL TRANSACTIONS RECORD MATRIX ---
+st.markdown("### 📋 Fleet Record Ledger")
 if len(df) > 0:
     display_df = df.copy()
     if 'km/L' in display_df.columns:
         display_df['km/L'] = display_df['km/L'].map(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 else:
-    st.info("The master log sheet registry is completely vacant. Input logs to initialize history ledger.")
+    st.info("Logbook ledger database empty.")
 
-st.markdown("<br><br><hr style='border:0.5px solid #E2E8F0;'>", unsafe_allow_html=True)
+st.markdown("<br><br><hr style='border:0.5px solid #1F2937;'>", unsafe_allow_html=True)
 
-# --- 8. DISCREET MANAGEMENT CONSOLE EXPANDER ---
-with st.expander("🛠️ System Console Settings", expanded=False):
+# --- UNDERGROUND ADMINISTRATIVE WORKSTATION ---
+with st.expander("🛠️ Console Engine Settings", expanded=False):
     if len(st.session_state.fuel_logs) > 0:
         log_options = [f"#{i+1} | {log['Date']} | {log['Odometer (km)']} km" for i, log in enumerate(st.session_state.fuel_logs)]
-        selected_option = st.selectbox("Select Target Registry Block:", log_options)
+        selected_option = st.selectbox("Target Block Row:", log_options)
         
         selected_index = log_options.index(selected_option)
         target_log = st.session_state.fuel_logs[selected_index]
         
-        st.markdown("<p style='font-size:0.8rem; font-weight:700; color:#64748B;'>FIELD MODIFICATION ARRAYS:</p>", unsafe_allow_html=True)
-        edit_date = st.date_input("Adjust Block Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"), key="edit_date_pick")
-        edit_odo = st.number_input("Adjust Odometer Reading (km)", min_value=0, value=int(target_log["Odometer (km)"]))
-        edit_liters = st.number_input("Adjust Liters Field", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
-        edit_cost = st.number_input("Adjust Cost Sheet (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
+        edit_date = st.date_input("Edit Stamping Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"), key="edit_date_pick")
+        edit_odo = st.number_input("Edit Odometer Reading", min_value=0, value=int(target_log["Odometer (km)"]))
+        edit_liters = st.number_input("Edit Liters Metric", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
+        edit_cost = st.number_input("Edit Total Price Stamped", min_value=0.0, value=float(target_log["Cost (₹)"]))
         
-        edit_air = st.checkbox("Override Air Status (Checked = Filled)", value=(target_log.get("Air Filled", "No") == "Yes"))
-        edit_srv_check = st.checkbox("Override Service Status (Checked = Executed)", value=(target_log.get("Last Service Date", "-") != "-"))
+        edit_air = st.checkbox("Toggle Air Filled Status", value=(target_log.get("Air Filled", "No") == "Yes"))
+        edit_srv_check = st.checkbox("Toggle Mechanical Service Status", value=(target_log.get("Last Service Date", "-") != "-"))
         
         edit_srv_date_str = "-"
         if edit_srv_check:
             current_srv_val = target_log.get("Last Service Date", "-")
             default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current_srv_val, "%Y-%m-%d")
-            edit_srv_date = st.date_input("Adjust Core Service Date", value=default_srv_date, key="edit_srv_pick")
+            edit_srv_date = st.date_input("Edit Service Link Date", value=default_srv_date, key="edit_srv_pick")
             edit_srv_date_str = edit_srv_date.strftime("%Y-%m-%d")
 
-        st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
         col_ed1, col_ed2 = st.columns(2)
         with col_ed1:
-            if st.button("💾 Apply Overwrite", use_container_width=True):
+            if st.button("💾 Apply Modifications", use_container_width=True):
                 st.session_state.fuel_logs[selected_index] = {
                     "Date": edit_date.strftime("%Y-%m-%d"),
                     "Odometer (km)": edit_odo,
@@ -208,12 +251,12 @@ with st.expander("🛠️ System Console Settings", expanded=False):
                     "Air Filled": "Yes" if edit_air else "No",
                     "Last Service Date": edit_srv_date_str
                 }
-                st.success("Log block entry overwritten successfully!")
+                st.success("Log block modified!")
                 st.rerun()
         with col_ed2:
-            if st.button("🗑️ Purge Block Entry", use_container_width=True):
+            if st.button("🗑️ Wipe Registry Record", use_container_width=True):
                 st.session_state.fuel_logs.pop(selected_index)
-                st.warning("Entry block permanently wiped from database storage.")
+                st.warning("Entry cleared from registry matrix.")
                 st.rerun()
     else:
-        st.caption("No diagnostic entry arrays available for backend manipulation.")
+        st.caption("Administrative override console empty.")
