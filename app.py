@@ -11,7 +11,7 @@ try:
 except ImportError:
     st.error("Please ensure 'google-genai' is listed in your requirements.txt file!")
 
-# Set up page configuration with a wide, modern layout
+# Set up page configuration
 st.set_page_config(page_title="Smart Car Tracker", page_icon="⚡", layout="centered")
 
 # --- CUSTOM APPLICATION HEADER ---
@@ -22,13 +22,10 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 1. INITIALIZE APP MEMORY ---
+# --- 1. INITIALIZE APP MEMORY (CLEAN SLATE) ---
 if "fuel_logs" not in st.session_state:
-    st.session_state.fuel_logs = [
-        {"Date": "2026-05-01", "Odometer (km)": 45000, "Liters": 40.0, "Cost (₹)": 3800.0},
-        {"Date": "2026-05-12", "Odometer (km)": 45550, "Liters": 42.5, "Cost (₹)": 4030.0},
-        {"Date": "2026-05-20", "Odometer (km)": 46120, "Liters": 41.0, "Cost (₹)": 3950.0},
-    ]
+    # CLEANED: Removed the dummy starter logs so it starts completely fresh
+    st.session_state.fuel_logs = []
 
 # Build working DataFrame
 df = pd.DataFrame(st.session_state.fuel_logs)
@@ -52,9 +49,9 @@ st.markdown("### 📊 Analytics Summary")
 with st.container(border=True):
     col_m1, col_m2 = st.columns(2)
     with col_m1:
-        st.metric(label="Average Fuel Mileage", value=f"{avg_mileage:.2f} km/L", delta=f"{avg_mileage-12:.2f} vs Base (12)" if avg_mileage > 0 else None)
+        st.metric(label="Average Fuel Mileage", value=f"{avg_mileage:.2f} km/L")
     with col_m2:
-        st.metric(label="Running Cost per KM", value=f"₹ {cost_per_km:.2f}", delta=f"-₹ {15-cost_per_km:.2f} Savings" if cost_per_km > 0 else None, delta_color="inverse")
+        st.metric(label="Running Cost per KM", value=f"₹ {cost_per_km:.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -160,4 +157,7 @@ with st.container(border=True):
 
 # --- 8. HISTORICAL TRANSACTIONS SHEET ---
 st.markdown("### 📋 Saved Entries Log")
-st.dataframe(df, use_container_width=True, hide_index=True)
+if len(df) > 0:
+    st.dataframe(df, use_container_width=True, hide_index=True)
+else:
+    st.info("Your logbook is empty. Use Step 1 & Step 2 above to scan and log your first real fuel receipt!")
