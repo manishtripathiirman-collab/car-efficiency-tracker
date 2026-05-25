@@ -22,6 +22,16 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# --- VISUAL HERO IMAGE (ECOSPORT AT THE PUMP) ---
+# High-quality public image showcasing a modern car at a fueling station
+st.image(
+    "https://images.unsplash.com/photo-1527018601619-a508a2be00cd?auto=format&fit=crop&w=800&q=80", 
+    caption="🚙 EcoSport Garage Status: Active",
+    use_container_width=True
+)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
 # --- 1. INITIALIZE APP MEMORY ---
 if "fuel_logs" not in st.session_state:
     st.session_state.fuel_logs = []
@@ -165,37 +175,4 @@ with st.container(border=True):
             edit_srv_date_str = "-"
             if edit_srv_check:
                 current_srv_val = target_log.get("Last Service Date", "-")
-                default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current_srv_val, "%Y-%m-%d")
-                edit_srv_date = st.date_input("Adjust Service Date", value=default_srv_date)
-                edit_srv_date_str = edit_srv_date.strftime("%Y-%m-%d")
-
-            col_ed1, col_ed2 = st.columns(2)
-            with col_ed1:
-                if st.button("💾 Save Changes", use_container_width=True):
-                    st.session_state.fuel_logs[selected_index] = {
-                        "Date": edit_date.strftime("%Y-%m-%d"),
-                        "Odometer (km)": edit_odo,
-                        "Liters": edit_liters,
-                        "Cost (₹)": edit_cost,
-                        "Air Filled": "Yes" if edit_air else "No",
-                        "Last Service Date": edit_srv_date_str
-                    }
-                    st.success("Changes saved!")
-                    st.rerun()
-            with col_ed2:
-                if st.button("🗑️ Delete Entry Permanently", use_container_width=True):
-                    st.session_state.fuel_logs.pop(selected_index)
-                    st.warning("Entry deleted successfully.")
-                    st.rerun()
-    else:
-        st.info("No logs stored to modify yet.")
-
-# --- 8. HISTORICAL TRANSACTIONS SHEET ---
-st.markdown("### 📋 Saved Entries Log")
-if len(df) > 0:
-    display_df = df.copy()
-    if 'km/L' in display_df.columns:
-        display_df['km/L'] = display_df['km/L'].map(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
-else:
-    st.info("Your logbook is empty. Use Step 1 & Step 2 above to log your first real fuel receipt!")
+                default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current
