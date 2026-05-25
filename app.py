@@ -15,7 +15,6 @@ except ImportError:
 st.set_page_config(page_title="Smart Car Tracker", page_icon="⚡", layout="centered")
 
 # --- ULTRA-LEAN BRANDED HEADER (MOBILE-FIRST) ---
-# Swapped heavy HTML CSS background cards for a native, tight typography alignment
 st.subheader("⚡ SMART CAR TRACKER")
 st.caption("🚙 EcoSport Workspace | AI Fuel & Maintenance Logbook")
 st.markdown("---")
@@ -133,54 +132,7 @@ if len(df) >= 2:
     chart_data = df.dropna(subset=['km/L']).set_index('Date')
     st.line_chart(chart_data['km/L'], color="#3B82F6")
 
-# --- 7. MOBILE-FRIENDLY EDIT & DELETE PANEL ---
-st.markdown("### 🛠️ Step 3: Edit or Delete Old Entries")
-with st.container(border=True):
-    if len(st.session_state.fuel_logs) > 0:
-        log_options = [f"#{i+1} | {log['Date']} | {log['Odometer (km)']} km" for i, log in enumerate(st.session_state.fuel_logs)]
-        selected_option = st.selectbox("Select a log entry to modify:", log_options)
-        
-        selected_index = log_options.index(selected_option)
-        target_log = st.session_state.fuel_logs[selected_index]
-        
-        with st.expander("📝 Modify Selected Entry Details"):
-            edit_date = st.date_input("Edit Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"), key="edit_date_pick")
-            edit_odo = st.number_input("Edit Odometer (km)", min_value=0, value=int(target_log["Odometer (km)"]))
-            edit_liters = st.number_input("Edit Liters", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
-            edit_cost = st.number_input("Edit Cost (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
-            
-            edit_air = st.checkbox("Edit Air Status (Checked = Yes)", value=(target_log.get("Air Filled", "No") == "Yes"))
-            edit_srv_check = st.checkbox("Edit Service Status (Checked = Serviced)", value=(target_log.get("Last Service Date", "-") != "-"))
-            
-            edit_srv_date_str = "-"
-            if edit_srv_check:
-                current_srv_val = target_log.get("Last Service Date", "-")
-                default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current_srv_val, "%Y-%m-%d")
-                edit_srv_date = st.date_input("Adjust Service Date", value=default_srv_date, key="edit_srv_pick")
-                edit_srv_date_str = edit_srv_date.strftime("%Y-%m-%d")
-
-            col_ed1, col_ed2 = st.columns(2)
-            with col_ed1:
-                if st.button("💾 Save Changes", use_container_width=True):
-                    st.session_state.fuel_logs[selected_index] = {
-                        "Date": edit_date.strftime("%Y-%m-%d"),
-                        "Odometer (km)": edit_odo,
-                        "Liters": edit_liters,
-                        "Cost (₹)": edit_cost,
-                        "Air Filled": "Yes" if edit_air else "No",
-                        "Last Service Date": edit_srv_date_str
-                    }
-                    st.success("Changes saved!")
-                    st.rerun()
-            with col_ed2:
-                if st.button("🗑️ Delete Entry Permanently", use_container_width=True):
-                    st.session_state.fuel_logs.pop(selected_index)
-                    st.warning("Entry deleted successfully.")
-                    st.rerun()
-    else:
-        st.info("No logs stored to modify yet.")
-
-# --- 8. HISTORICAL TRANSACTIONS SHEET ---
+# --- 7. HISTORICAL TRANSACTIONS SHEET ---
 st.markdown("### 📋 Saved Entries Log")
 if len(df) > 0:
     display_df = df.copy()
@@ -189,3 +141,52 @@ if len(df) > 0:
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 else:
     st.info("Your logbook is empty.")
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+# --- 8. HIDDEN/NON-DESCRIPT ADVANCED SETTINGS PANEL ---
+# Collapsed completely into a small, neutral link at the bottom of the page
+with st.expander("🛠️ Advanced Settings", expanded=False):
+    if len(st.session_state.fuel_logs) > 0:
+        log_options = [f"#{i+1} | {log['Date']} | {log['Odometer (km)']} km" for i, log in enumerate(st.session_state.fuel_logs)]
+        selected_option = st.selectbox("Select entry to modify:", log_options)
+        
+        selected_index = log_options.index(selected_option)
+        target_log = st.session_state.fuel_logs[selected_index]
+        
+        st.markdown("**Modify Record Fields:**")
+        edit_date = st.date_input("Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"), key="edit_date_pick")
+        edit_odo = st.number_input("Odometer (km)", min_value=0, value=int(target_log["Odometer (km)"]))
+        edit_liters = st.number_input("Liters", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
+        edit_cost = st.number_input("Cost (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
+        
+        edit_air = st.checkbox("Air Filled Status", value=(target_log.get("Air Filled", "No") == "Yes"))
+        edit_srv_check = st.checkbox("Vehicle Serviced Status", value=(target_log.get("Last Service Date", "-") != "-"))
+        
+        edit_srv_date_str = "-"
+        if edit_srv_check:
+            current_srv_val = target_log.get("Last Service Date", "-")
+            default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current_srv_val, "%Y-%m-%d")
+            edit_srv_date = st.date_input("Service Date Update", value=default_srv_date, key="edit_srv_pick")
+            edit_srv_date_str = edit_srv_date.strftime("%Y-%m-%d")
+
+        col_ed1, col_ed2 = st.columns(2)
+        with col_ed1:
+            if st.button("💾 Apply Changes", use_container_width=True):
+                st.session_state.fuel_logs[selected_index] = {
+                    "Date": edit_date.strftime("%Y-%m-%d"),
+                    "Odometer (km)": edit_odo,
+                    "Liters": edit_liters,
+                    "Cost (₹)": edit_cost,
+                    "Air Filled": "Yes" if edit_air else "No",
+                    "Last Service Date": edit_srv_date_str
+                }
+                st.success("Changes saved!")
+                st.rerun()
+        with col_ed2:
+            if st.button("🗑️ Delete Record", use_container_width=True):
+                st.session_state.fuel_logs.pop(selected_index)
+                st.warning("Record deleted.")
+                st.rerun()
+    else:
+        st.caption("No entry records available to manage.")
