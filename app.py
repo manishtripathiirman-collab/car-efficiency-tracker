@@ -119,3 +119,19 @@ with form_col2:
 
 if st.button("Save Entry", use_container_width=True):
     if odometer > 0 and liters > 0 and price > 0:
+        new_entry = {
+            "Date": log_date.strftime("%Y-%m-%d"),
+            "Odometer (km)": odometer,
+            "Liters": liters,
+            "Cost (₹)": price
+        }
+        st.session_state.fuel_logs.append(new_entry)
+        st.success("Log added successfully!")
+        st.rerun()
+    else:
+        st.error("Please provide valid data inputs across all fields before compiling your log entry.")
+
+# --- 6. HISTORICAL TRANSACTIONS SHEET ---
+st.markdown("---")
+st.subheader("📋 Saved Entries Log")
+st.dataframe(df, use_container_width=True, hide_index=True)
