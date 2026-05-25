@@ -11,32 +11,14 @@ try:
 except ImportError:
     st.error("Please ensure 'google-genai' is listed in your requirements.txt file!")
 
-# Set up page configuration with a compact layout
+# Set up page configuration with centered layout
 st.set_page_config(page_title="Smart Car Tracker", page_icon="⚡", layout="centered")
 
-# --- UNIFIED BRANDED BANNER ASSET (LEAN & INTEGRATED) ---
-# This single asset replaces the massive block headers with a sleek typography layout
-st.markdown("""
-    <div style="
-        background: linear-gradient(rgba(30, 58, 138, 0.85), rgba(59, 130, 246, 0.85)), 
-                    url('https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&w=800&q=80');
-        background-size: cover;
-        background-position: center;
-        padding: 20px 15px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        text-align: center;
-        color: white;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    ">
-        <h2 style='margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: 0.8px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6);'>
-            ⚡ SMART CAR TRACKER
-        </h2>
-        <p style='margin: 4px 0 0 0; opacity: 0.9; font-size: 0.85rem; font-weight: 500; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);'>
-            AI Fuel Analytics & Maintenance Management
-        </p>
-    </div>
-""", unsafe_allow_html=True)
+# --- ULTRA-LEAN BRANDED HEADER (MOBILE-FIRST) ---
+# Swapped heavy HTML CSS background cards for a native, tight typography alignment
+st.subheader("⚡ SMART CAR TRACKER")
+st.caption("🚙 EcoSport Workspace | AI Fuel & Maintenance Logbook")
+st.markdown("---")
 
 # --- 1. INITIALIZE APP MEMORY ---
 if "fuel_logs" not in st.session_state:
@@ -67,8 +49,6 @@ with st.container(border=True):
         st.metric(label="Average Fuel Mileage", value=f"{avg_mileage:.2f} km/L")
     with col_m2:
         st.metric(label="Running Cost per KM", value=f"₹ {cost_per_km:.2f}")
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 4. LIVE AUTOMATED AI BILL SCANNER ---
 st.markdown("### 📷 Step 1: Scan Bill")
@@ -107,8 +87,6 @@ with st.container(border=True):
                         st.error(f"Error parsing receipt text: {e}")
     else:
         st.caption("🔒 Camera hardware is currently offline.")
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 5. VEHICLE LOG ENTRY FORM WITH INTEGRATED CHECKS ---
 st.markdown("### ⛽ Step 2: Verify & Log Details")
@@ -149,15 +127,11 @@ with st.container(border=True):
         else:
             st.error("Please provide valid data inputs across all fields.")
 
-st.markdown("<br>", unsafe_allow_html=True)
-
 # --- 6. VISUAL ANALYTICS CHART ---
 if len(df) >= 2:
     st.markdown("### 📈 Efficiency Trend (km/L over time)")
     chart_data = df.dropna(subset=['km/L']).set_index('Date')
     st.line_chart(chart_data['km/L'], color="#3B82F6")
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 7. MOBILE-FRIENDLY EDIT & DELETE PANEL ---
 st.markdown("### 🛠️ Step 3: Edit or Delete Old Entries")
@@ -214,4 +188,4 @@ if len(df) > 0:
         display_df['km/L'] = display_df['km/L'].map(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 else:
-    st.info("Your logbook is empty. Use Step 1 & Step 2 above to log your first real fuel receipt!")
+    st.info("Your logbook is empty.")
