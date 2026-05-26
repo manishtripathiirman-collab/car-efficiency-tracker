@@ -182,4 +182,54 @@ if menu_tab:
                 if save_log_to_cloud(new_entry_payload):
                     st.success("Log safely synced to permanent cloud servers database!")
                     st.rerun()
-                else
+                else:
+                    st.error("Network Error: Cloud connection timeout. Try again.")
+            else:
+                st.error("Validation Halt: Readings must be set higher than zero.")
+
+    # --- HISTORICAL TRANSACTIONS RECORD SHEET ---
+    st.markdown("### 📋 Your Personal Log Ledger")
+    if not user_df.empty:
+        clean_user_df = user_df.sort_values("log_date", ascending=False)[['log_date', 'odometer', 'liters', 'cost']]
+        st.dataframe(clean_user_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("Your individual garage registry sheet is currently vacant.")
+
+# --- TAB 2: GLOBAL LEADERBOARD STANDINGS ---
+with leaderboard_tab:
+    st.title("🏆 Workspace Efficiency Standings")
+    st.caption("Rankings calculated globally via Lifetime Average Mileage.")
+    
+    raw_cloud_data = fetch_logs_from_cloud()
+    
+    if raw_cloud_data:
+        master_df = pd.DataFrame(raw_cloud_data)
+        leaderboard_records = []
+        
+        # Loop through each individual user independently to calculate global standings
+        for user in master_df['user_id'].unique():
+            sub_df = master_df[master_df['user_id'] == user].sort_values("odometer").reset_index(drop=True)
+            
+            if len(sub_df) >= 2:
+                sub_df['dist'] = sub_df['odometer'].diff()
+                total_km = sub_df['dist'].sum()
+                total_liters = sub_df['liters'].iloc[1:].sum()
+                
+                if total_liters > 0:
+                    lifetime_avg = total_km / total_liters
+                    leaderboard_records.append({
+                        "Driver": f"👤 {user}",
+                        "Lifetime Average Mileage": f"{lifetime_avg:.2f} km/L",
+                        "Sort_Val": lifetime_avg
+                    })
+        
+        if leaderboard_records:
+            final_leaderboard = pd.DataFrame(leaderboard_records).sort_values("Sort_Val", ascending=False).drop(columns=["Sort_Val"])
+            st.dataframe(final_leaderboard, use_container_width=True, hide_index=True)
+        else:
+            st.info("Insufficient system logs globally to render tournament tables yet.")
+    else:
+        st.info("No logs present across cloud servers.")
+
+# Non-descript master developer signature flag at the base
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | core pipeline matrix v2.6</div>", unsafe_allow_html=True)
