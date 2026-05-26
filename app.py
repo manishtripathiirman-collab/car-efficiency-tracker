@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 from PIL import Image
 import json
-import os
+import requests
 
 # Ensure the Google GenAI library is present
 try:
@@ -11,182 +11,175 @@ try:
 except ImportError:
     st.error("Please ensure 'google-genai' is listed in your requirements.txt file!")
 
-# Set up page configuration with a compact layout
-st.set_page_config(page_title="Smart Car Tracker", page_icon="⚡", layout="centered")
+# Set up clean mobile-first viewport architecture
+st.set_page_config(page_title="EcoSport Team Cockpit", page_icon="⚡", layout="centered")
 
-# --- CLEAN NATIVE HEADER BRANDING ---
-st.title("⚡ SMART CAR TRACKER")
-st.caption("🚙 EcoSport Telemetry & Intelligence Rig")
+# --- INITIALIZE CONNECTION TO SUPABASE VIA REST API ---
+SUPABASE_URL = st.secrets.get("SUPABASE_URL")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+}
 
-# --- 1. INITIALIZE APP MEMORY ---
-if "fuel_logs" not in st.session_state:
-    st.session_state.fuel_logs = []
+def fetch_logs_from_cloud():
+    """Pulls all raw data from Supabase cloud ledger safely"""
+    try:
+        response = requests.get(f"{SUPABASE_URL}/rest/v1/fuel_logs?select=*", headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+    except Exception:
+        pass
+    return []
 
-# Build working DataFrame
-df = pd.DataFrame(st.session_state.fuel_logs)
+def save_log_to_cloud(payload):
+    """Commits a brand new telemetry row directly into the database row matrix"""
+    try:
+        response = requests.post(f"{SUPABASE_URL}/rest/v1/fuel_logs", headers=HEADERS, json=payload, timeout=10)
+        return response.status_code in [200, 201]
+    except Exception:
+        return False
 
-# --- 2. THE ROLLING MATH ENGINE ---
-if len(df) >= 2:
-    df = df.sort_values("Odometer (km)").reset_index(drop=True)
-    df['Distance Driven (km)'] = df['Odometer (km)'].diff()
-    df['km/L'] = df['Distance Driven (km)'] / df['Liters']
+# --- USER PASS GATEWAY (SIMPLE SECURITY MATRIX) ---
+# Hardcoded credentials for your team - you can add more friends here anytime!
+USER_DB = {
+    "mantri": "petrol123",
+    "abhishek": "diesel456",
+    "rahul": "cng789"
+}
+
+if "logged_in_user" not in st.session_state:
+    st.session_state.logged_in_user = None
+
+if st.session_state.logged_in_user is None:
+    st.title("🔐 Fleet Gateway Login")
+    st.caption("Access restricted to authorized vehicle operators.")
     
-    total_tracked_km = df['Distance Driven (km)'].sum()
-    total_money_spent = df['Cost (₹)'].sum()
-    
-    avg_mileage = total_tracked_km / df['Liters'].iloc[1:].sum()
-    cost_per_km = total_money_spent / total_tracked_km
-else:
-    avg_mileage, cost_per_km = 0.0, 0.0
+    with st.container(border=True):
+        username_input = st.text_input("Operator Username").strip().lower()
+        password_input = st.text_input("Security Passkey", type="password")
+        
+        if st.button("Authenticate Identity", use_container_width=True, type="primary"):
+            if username_input in USER_DB and USER_DB[username_input] == password_input:
+                st.session_state.logged_in_user = username_input
+                st.success(f"Access Granted. Welcome back, {username_input}.")
+                st.rerun()
+            else:
+                st.error("Authentication Failure: Invalid username or passkey.")
+    st.stop() # Halts app rendering here until user passes login screen
 
-# --- 3. PREMIUM METRICS DASHBOARD ---
-st.markdown("### 📊 Performance Analytics")
-with st.container(border=True):
-    col_m1, col_m2 = st.columns(2)
-    with col_m1:
-        st.metric(label="Average Fuel Mileage", value=f"{avg_mileage:.2f} km/L")
-    with col_m2:
-        st.metric(label="Running Cost", value=f"₹ {cost_per_km:.2f} / km")
+# Track current session context
+current_user = st.session_state.logged_in_user
 
-# --- 4. LIVE AUTOMATED AI BILL SCANNER ---
-st.markdown("### 📷 Step 1: Scan Bill")
-with st.container(border=True):
-    activate_camera = st.checkbox("Initialize AI Scanner Camera", value=False)
+# --- TOP INTERACTIVE NAVIGATION WRAPPER ---
+menu_tab, leaderboard_tab = st.tabs(["🚙 My Telemetry Console", "🏆 Global Performance Leaderboard"])
+
+# --- TAB 1: THE CORE INDIVIDUAL DRIVER CONSOLE ---
+if menu_tab:
+    st.title(f"⚡ Welcome, {current_user}")
+    st.caption(f"Secure Workspace Session Active | Connected to Cloud Ledger")
     
+    # Logout action trigger link
+    if st.sidebar.button("🔒 Secure Sign-Out", use_container_width=True):
+        st.session_state.logged_in_user = None
+        st.rerun()
+
+    # Pull latest cloud matrix data
+    raw_cloud_data = fetch_logs_from_cloud()
+    all_df = pd.DataFrame(raw_cloud_data)
+    
+    # ISOLATION GATEWAY: Filter data strictly for current active operator session
+    if not all_df.empty:
+        user_df = all_df[all_df['user_id'] == current_user].copy()
+    else:
+        user_df = pd.DataFrame()
+
+    # --- INDIVIDUAL THE ROLLING MATH ENGINE ---
+    if len(user_df) >= 2:
+        user_df = user_df.sort_values("odometer").reset_index(drop=True)
+        user_df['distance_driven'] = user_df['odometer'].diff()
+        user_df['km_l'] = user_df['distance_driven'] / user_df['liters']
+        
+        total_tracked_km = user_df['distance_driven'].sum()
+        total_money_spent = user_df['cost'].sum()
+        
+        avg_mileage = total_tracked_km / user_df['liters'].iloc[1:].sum()
+        cost_per_km = total_money_spent / total_tracked_km
+    else:
+        avg_mileage, cost_per_km = 0.0, 0.0
+
+    # --- MAIN SCREEN METRIC CARDS ---
+    st.markdown("### 📊 Your Performance Analytics")
+    with st.container(border=True):
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.metric(label="Your Average Mileage", value=f"{avg_mileage:.2f} km/L")
+        with col_m2:
+            st.metric(label="Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
+
+    # --- LIVE AUTOMATED AI BILL SCANNER ---
+    st.markdown("### 📷 Step 1: Scan Bill via Vision AI")
     scanned_liters = 0.0
     scanned_price = 0.0
-    api_key = st.secrets.get("GEMINI_API_KEY")
-
-    if activate_camera:
-        uploaded_bill = st.camera_input("Snap a crisp photo of your petrol bill")
-
-        if uploaded_bill is not None:
-            img = Image.open(uploaded_bill)
-            
-            if not api_key:
-                st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to settings.")
-            else:
-                with st.spinner("⚡ AI is scanning receipt strings..."):
-                    try:
-                        client = genai.Client(api_key=api_key)
-                        prompt = """
-                        Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
-                        Return output strictly formatted as JSON object with keys "liters" and "total_cost".
-                        """
-                        response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
-                        cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
-                        data = json.loads(cleaned_text)
-                        
-                        scanned_liters = float(data.get("liters", 0.0))
-                        scanned_price = float(data.get("total_cost", 0.0))
-                        
-                        st.success(f"🤖 Scanner Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
-                    except Exception as e:
-                        st.error(f"Error parsing receipt text: {e}")
-    else:
-        st.caption("🔒 Scanner telemetry offline.")
-
-# --- 5. VEHICLE LOG ENTRY FORM WITH INTEGRATED CHECKS ---
-st.markdown("### ⛽ Step 2: Verify & Log Details")
-with st.container(border=True):
-    form_col1, form_col2 = st.columns(2)
-    with form_col1:
-        log_date = st.date_input("Date of Fill-up", value=datetime.today(), key="log_date_main")
-        odometer = st.number_input("Current Odometer Reading (km)", min_value=0, step=1)
-    with form_col2:
-        liters = st.number_input("Liters of Petrol Filled", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
-        price = st.number_input("Total Bill Amount (₹)", min_value=0.0, value=scanned_price, step=10.0)
     
-    st.markdown("**Additional Checks at Pump:**")
-    col_chk1, col_chk2 = st.columns(2)
-    with col_chk1:
-        air_filled = st.checkbox("💨 Air filled today?", value=False)
-    with col_chk2:
-        had_service = st.checkbox("🔧 Was vehicle serviced today?", value=False)
-    
-    service_date_str = "-"
-    if had_service:
-        service_date = st.date_input("Confirm Service Date", value=datetime.today(), key="srv_date_main")
-        service_date_str = service_date.strftime("%Y-%m-%d")
+    with st.container(border=True):
+        activate_camera = st.checkbox("Initialize AI Scanner Camera", value=False)
+        api_key = st.secrets.get("GEMINI_API_KEY")
 
-    if st.button("Save Entry", use_container_width=True, type="primary"):
-        if odometer > 0 and liters > 0 and price > 0:
-            new_entry = {
-                "Date": log_date.strftime("%Y-%m-%d"),
-                "Odometer (km)": odometer,
-                "Liters": liters,
-                "Cost (₹)": price,
-                "Air Filled": "Yes" if air_filled else "No",
-                "Last Service Date": service_date_str
-            }
-            st.session_state.fuel_logs.append(new_entry)
-            st.success("Log added successfully!")
-            st.rerun()
+        if activate_camera:
+            uploaded_bill = st.camera_input("Snap a crisp photo of your petrol bill")
+
+            if uploaded_bill is not None:
+                img = Image.open(uploaded_bill)
+                
+                if not api_key:
+                    st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to settings.")
+                else:
+                    with st.spinner("⚡ AI is scanning receipt strings..."):
+                        try:
+                            client = genai.Client(api_key=api_key)
+                            prompt = """
+                            Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
+                            Return output strictly formatted as JSON object with keys "liters" and "total_cost".
+                            """
+                            response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
+                            cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
+                            data = json.loads(cleaned_text)
+                            
+                            scanned_liters = float(data.get("liters", 0.0))
+                            scanned_price = float(data.get("total_cost", 0.0))
+                            
+                            st.success(f"🤖 Scanner Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
+                        except Exception as e:
+                            st.error(f"Error parsing receipt text: {e}")
         else:
-            st.error("Please provide valid data inputs across all fields.")
+            st.caption("🔒 Scanner telemetry offline.")
 
-# --- 6. VISUAL ANALYTICS CHART ---
-if len(df) >= 2:
-    st.markdown("### 📈 Efficiency Trend (km/L over time)")
-    chart_data = df.dropna(subset=['km/L']).set_index('Date')
-    st.line_chart(chart_data['km/L'])
-
-# --- 7. HISTORICAL TRANSACTIONS SHEET ---
-st.markdown("### 📋 Saved Entries Log")
-if len(df) > 0:
-    display_df = df.copy()
-    if 'km/L' in display_df.columns:
-        display_df['km/L'] = display_df['km/L'].map(lambda x: f"{x:.2f}" if pd.notnull(x) else "-")
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
-else:
-    st.info("Your logbook is empty.")
-
-st.markdown("<br><br><hr style='opacity:0.2;'>", unsafe_allow_html=True)
-
-# --- 8. HIDDEN/NON-DESCRIPT ADVANCED SETTINGS PANEL ---
-with st.expander("⚙️ Advanced Options", expanded=False):
-    if len(st.session_state.fuel_logs) > 0:
-        log_options = [f"#{i+1} | {log['Date']} | {log['Odometer (km)']} km" for i, log in enumerate(st.session_state.fuel_logs)]
-        selected_option = st.selectbox("Select entry to modify:", log_options)
+    # --- TELEMETRY FILL FORM ---
+    st.markdown("### ⛽ Step 2: Verify & Log Fuel Telemetry")
+    with st.container(border=True):
+        form_col1, form_col2 = st.columns(2)
+        with form_col1:
+            log_date = st.date_input("Transaction Date Stamping", value=datetime.today())
+            odometer = st.number_input("Odometer Tracker (km)", min_value=0, step=1)
+        with form_col2:
+            # Dynamically pre-filled if the scanner picked up text data
+            liters = st.number_input("Infused Volume (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
+            price = st.number_input("Transaction Total Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
         
-        selected_index = log_options.index(selected_option)
-        target_log = st.session_state.fuel_logs[selected_index]
-        
-        edit_date = st.date_input("Date", value=datetime.strptime(target_log["Date"], "%Y-%m-%d"), key="edit_date_pick")
-        edit_odo = st.number_input("Odometer (km)", min_value=0, value=int(target_log["Odometer (km)"]))
-        edit_liters = st.number_input("Liters", min_value=0.0, value=float(target_log["Liters"]), step=0.01)
-        edit_cost = st.number_input("Cost (₹)", min_value=0.0, value=float(target_log["Cost (₹)"]))
-        
-        edit_air = st.checkbox("Air Filled Status", value=(target_log.get("Air Filled", "No") == "Yes"))
-        edit_srv_check = st.checkbox("Vehicle Serviced Status", value=(target_log.get("Last Service Date", "-") != "-"))
-        
-        edit_srv_date_str = "-"
-        if edit_srv_check:
-            current_srv_val = target_log.get("Last Service Date", "-")
-            default_srv_date = datetime.today() if current_srv_val == "-" else datetime.strptime(current_srv_val, "%Y-%m-%d")
-            edit_srv_date = st.date_input("Service Date Update", value=default_srv_date, key="edit_srv_pick")
-            edit_srv_date_str = edit_srv_date.strftime("%Y-%m-%d")
-
-        col_ed1, col_ed2 = st.columns(2)
-        with col_ed1:
-            if st.button("💾 Apply Changes", use_container_width=True):
-                st.session_state.fuel_logs[selected_index] = {
-                    "Date": edit_date.strftime("%Y-%m-%d"),
-                    "Odometer (km)": edit_odo,
-                    "Liters": edit_liters,
-                    "Cost (₹)": edit_cost,
-                    "Air Filled": "Yes" if edit_air else "No",
-                    "Last Service Date": edit_srv_date_str
+        if st.button("⚡ Commit Entry to Cloud Matrix", use_container_width=True, type="primary"):
+            if odometer > 0 and liters > 0 and price > 0:
+                # Package record dictionary with hidden user_id stamp!
+                new_entry_payload = {
+                    "user_id": current_user, 
+                    "log_date": log_date.strftime("%Y-%m-%d"),
+                    "odometer": int(odometer),
+                    "liters": float(liters),
+                    "cost": float(price)
                 }
-                st.success("Changes saved!")
-                st.rerun()
-        with col_ed2:
-            if st.button("🗑️ Delete Record", use_container_width=True):
-                st.session_state.fuel_logs.pop(selected_index)
-                st.warning("Record deleted.")
-                st.rerun()
-    else:
-        st.caption("No records available to manage.")
-
-# --- LOWERCASE CREDITS ---
-st.markdown("<div style='text-align: center; opacity: 0.3; font-size: 0.75rem; letter-spacing: 1px;'>by mantri</div>", unsafe_allow_html=True)
+                if save_log_to_cloud(new_entry_payload):
+                    st.success("Log safely synced to permanent cloud servers database!")
+                    st.rerun()
+                else
