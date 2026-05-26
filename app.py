@@ -61,7 +61,6 @@ if st.session_state.logged_in_user is None:
         raw_users = fetch_from_supabase("app_users")
         user_credentials_map = {row["username"]: row["passkey"] for row in raw_users}
         
-        # Super-admin default failsafe configuration
         if "mantri" not in user_credentials_map:
             user_credentials_map["mantri"] = "petrol123"
         
@@ -144,41 +143,53 @@ if menu_tab:
         with col_m2:
             st.metric(label="Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
 
-    # --- LIVE AUTOMATED AI BILL SCANNER ---
+    # --- LIVE ADJACENT SCANNER & ATTACHMENT PORTS ---
     st.markdown("### 📷 Step 1: Scan Bill via Vision AI")
     scanned_liters = 0.0
     scanned_price = 0.0
+    target_bill_file = None
     
     with st.container(border=True):
-        activate_camera = st.checkbox("Initialize AI Scanner Camera", value=False)
-        api_key = st.secrets.get("GEMINI_API_KEY")
+        # Splitting camera and document attachment adjacent into two clean side-by-side columns
+        cam_col, upload_col = st.columns(2)
+        
+        with cam_col:
+            st.markdown("**Option A: Live Camera Snap**")
+            camera_snap = st.camera_input("Take live photo of receipt")
+            if camera_snap:
+                target_bill_file = camera_snap
+                
+        with upload_col:
+            st.markdown("**Option B: Document Attachment**")
+            file_upload = st.file_uploader("Upload receipt image copy", type=["png", "jpg", "jpeg"])
+            if file_upload:
+                target_bill_file = file_upload
 
-        if activate_camera:
-            uploaded_bill = st.camera_input("Snap a crisp photo of your petrol bill")
-
-            if uploaded_bill is not None:
-                img = Image.open(uploaded_bill)
-                if not api_key:
-                    st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to settings.")
-                else:
-                    with st.spinner("⚡ AI is scanning receipt strings..."):
-                        try:
-                            from google import genai
-                            client = genai.Client(api_key=api_key)
-                            prompt = """
-                            Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
-                            Return output strictly formatted as JSON object with keys "liters" and "total_cost".
-                            """
-                            response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
-                            cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
-                            data = json.loads(cleaned_text)
-                            
-                            scanned_liters = float(data.get("liters", 0.0))
-                            scanned_price = float(data.get("total_cost", 0.0))
-                            
-                            st.success(f"🤖 Scanner Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
-                        except Exception as e:
-                            st.error(f"Error parsing receipt text: {e}")
+        # Process the chosen file input (either camera or attachment upload) through Gemini
+        if target_bill_file is not None:
+            api_key = st.secrets.get("GEMINI_API_KEY")
+            if not api_key:
+                st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to settings.")
+            else:
+                with st.spinner("⚡ AI is scanning document strings..."):
+                    try:
+                        img = Image.open(target_bill_file)
+                        from google import genai
+                        client = genai.Client(api_key=api_key)
+                        prompt = """
+                        Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
+                        Return output strictly formatted as JSON object with keys "liters" and "total_cost".
+                        """
+                        response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
+                        cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
+                        data = json.loads(cleaned_text)
+                        
+                        scanned_liters = float(data.get("liters", 0.0))
+                        scanned_price = float(data.get("total_cost", 0.0))
+                        
+                        st.success(f"🤖 AI Scanner Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
+                    except Exception as e:
+                        st.error(f"Error parsing document text: {e}")
 
     # --- TELEMETRY FILL FORM ---
     st.markdown("### ⛽ Step 2: Verify & Log Fuel Telemetry")
@@ -208,15 +219,12 @@ if menu_tab:
             else:
                 st.error("Validation Halt: Readings must be set higher than zero.")
 
-    # --- DEMOCRATIZED HISTORICAL TRANSACTIONS SHEET WITH UNIVERSAL DELETION ---
+    # --- DEMOCRATIZED HISTORICAL TRANSACTIONS SHEET ---
     st.markdown("### 📋 Your Personal Log Ledger")
     if not user_df.empty:
         clean_user_df = user_df.sort_values("log_date", ascending=False)
-        
-        # Display data grid
         st.dataframe(clean_user_df[['log_date', 'odometer', 'liters', 'cost']], use_container_width=True, hide_index=True)
         
-        # OPEN UTILITY BOX: Accessible to ALL logged in users for their own rows
         with st.expander("🗑️ Delete/Remove a Log Record"):
             row_to_delete = st.selectbox(
                 "Select one of your log entries to delete permanently:",
@@ -274,9 +282,7 @@ if is_admin and admin_tab:
         raw_cloud_data = fetch_from_supabase("fuel_logs")
         if raw_cloud_data:
             admin_df = pd.DataFrame(raw_cloud_data).sort_values("log_date", ascending=False)
-            
             st.markdown("### 🌍 Comprehensive System Master Ledger")
-            st.caption("Below is the combined master table showing entries from all users.")
             st.dataframe(admin_df[['id', 'user_id', 'log_date', 'odometer', 'liters', 'cost']], use_container_width=True, hide_index=True)
             
             st.markdown("### 🚨 Global Row Override Control")
@@ -294,4 +300,4 @@ if is_admin and admin_tab:
         else:
             st.info("The global log grid is completely empty.")
 
-st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | democratized pipeline matrix v3.6</div>", unsafe_allow_html=True)
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | adjacent media console v3.7</div>", unsafe_allow_html=True)
