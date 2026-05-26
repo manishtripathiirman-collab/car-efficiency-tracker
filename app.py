@@ -5,12 +5,6 @@ from PIL import Image
 import json
 import requests
 
-# Ensure the Google GenAI library is present
-try:
-    from google import genai
-except ImportError:
-    st.error("Please ensure 'google-genai' is listed in your requirements.txt file!")
-
 # Set up clean mobile-first viewport architecture
 st.set_page_config(page_title="EcoSport Team Cockpit", page_icon="⚡", layout="centered")
 
@@ -24,53 +18,72 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-def fetch_logs_from_cloud():
-    """Pulls all raw data from Supabase cloud ledger safely"""
+def fetch_from_supabase(table_name):
+    """Pulls raw logs from designated cloud tables safely"""
     try:
-        response = requests.get(f"{SUPABASE_URL}/rest/v1/fuel_logs?select=*", headers=HEADERS, timeout=10)
+        response = requests.get(f"{SUPABASE_URL}/rest/v1/{table_name}?select=*", headers=HEADERS, timeout=10)
         if response.status_code == 200:
             return response.json()
     except Exception:
         pass
     return []
 
-def save_log_to_cloud(payload):
-    """Commits a brand new telemetry row directly into the database row matrix"""
+def commit_to_supabase(table_name, payload):
+    """Inserts a fresh data payload row directly into a cloud table"""
     try:
-        response = requests.post(f"{SUPABASE_URL}/rest/v1/fuel_logs", headers=HEADERS, json=payload, timeout=10)
+        response = requests.post(f"{SUPABASE_URL}/rest/v1/{table_name}", headers=HEADERS, json=payload, timeout=10)
         return response.status_code in [200, 201]
     except Exception:
         return False
 
-# --- USER PASS GATEWAY (SIMPLE SECURITY MATRIX) ---
-# Hardcoded credentials for your team - you can add more friends here anytime!
-USER_DB = {
-    "mantri": "petrol123",
-    "abhishek": "diesel456",
-    "rahul": "cng789"
-}
-
+# --- DYNAMIC MULTI-USER IDENTITY PORTAL ---
 if "logged_in_user" not in st.session_state:
     st.session_state.logged_in_user = None
 
 if st.session_state.logged_in_user is None:
-    st.title("🔐 Fleet Gateway Login")
-    st.caption("Access restricted to authorized vehicle operators.")
+    st.title("🔐 Fleet Gateway Portal")
+    st.caption("Sign in to your console or provision a new user registry record.")
+    
+    # Toggle choices between signing in or self-registering
+    gate_mode = st.radio("Choose Gateway Action:", ["Sign-In Existing Operator", "Register New Driver Account"], horizontal=True)
     
     with st.container(border=True):
-        username_input = st.text_input("Operator Username").strip().lower()
-        password_input = st.text_input("Security Passkey", type="password")
+        reg_username = st.text_input("Operator Username").strip().lower()
+        reg_password = st.text_input("Security Passkey", type="password")
         
-        if st.button("Authenticate Identity", use_container_width=True, type="primary"):
-            if username_input in USER_DB and USER_DB[username_input] == password_input:
-                st.session_state.logged_in_user = username_input
-                st.success(f"Access Granted. Welcome back, {username_input}.")
-                st.rerun()
-            else:
-                st.error("Authentication Failure: Invalid username or passkey.")
-    st.stop() # Halts app rendering here until user passes login screen
+        # Pull up-to-date active accounts list directly from the cloud database
+        raw_users = fetch_from_supabase("app_users")
+        user_credentials_map = {row["username"]: row["passkey"] for row in raw_users}
+        
+        if gate_mode == "Sign-In Existing Operator":
+            if st.button("Authenticate Identity", use_container_width=True, type="primary"):
+                if not reg_username or not reg_password:
+                    st.warning("Please complete both access fields.")
+                elif reg_username in user_credentials_map and user_credentials_map[reg_username] == reg_password:
+                    st.session_state.logged_in_user = reg_username
+                    st.success(f"Access Granted. Welcome back.")
+                    st.rerun()
+                else:
+                    st.error("Authentication Failure: Invalid credentials.")
+                    
+        elif gate_mode == "Register New Driver Account":
+            st.caption("⚠️ Your password will be saved securely to your private cloud ecosystem database.")
+            if st.button("🚀 Provision New Account", use_container_width=True, type="primary"):
+                if len(reg_username) < 3 or len(reg_password) < 4:
+                    st.error("Account Policy: Username must be ≥3 characters, Passkey ≥4 characters.")
+                elif reg_username in user_credentials_map:
+                    st.error("Registry Collision: This username is already claimed by another driver.")
+                else:
+                    # Construct registry token to send to Supabase
+                    user_payload = {"username": reg_username, "passkey": reg_password}
+                    if commit_to_supabase("app_users", user_payload):
+                        st.success(f"Success! Account '{reg_username}' provisioned. Switch to 'Sign-In' to log in.")
+                    else:
+                        st.error("Database error connecting to storage vault.")
+                        
+    st.stop() # Freeze app execution until identity is established
 
-# Track current session context
+# Identify operator session baseline
 current_user = st.session_state.logged_in_user
 
 # --- TOP INTERACTIVE NAVIGATION WRAPPER ---
@@ -81,16 +94,14 @@ if menu_tab:
     st.title(f"⚡ Welcome, {current_user}")
     st.caption(f"Secure Workspace Session Active | Connected to Cloud Ledger")
     
-    # Logout action trigger link
     if st.sidebar.button("🔒 Secure Sign-Out", use_container_width=True):
         st.session_state.logged_in_user = None
         st.rerun()
 
     # Pull latest cloud matrix data
-    raw_cloud_data = fetch_logs_from_cloud()
+    raw_cloud_data = fetch_from_supabase("fuel_logs")
     all_df = pd.DataFrame(raw_cloud_data)
     
-    # ISOLATION GATEWAY: Filter data strictly for current active operator session
     if not all_df.empty:
         user_df = all_df[all_df['user_id'] == current_user].copy()
     else:
@@ -139,6 +150,8 @@ if menu_tab:
                 else:
                     with st.spinner("⚡ AI is scanning receipt strings..."):
                         try:
+                            # Initialize standard client directly using secret key parameters
+                            from google import genai
                             client = genai.Client(api_key=api_key)
                             prompt = """
                             Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
@@ -165,13 +178,11 @@ if menu_tab:
             log_date = st.date_input("Transaction Date Stamping", value=datetime.today())
             odometer = st.number_input("Odometer Tracker (km)", min_value=0, step=1)
         with form_col2:
-            # Dynamically pre-filled if the scanner picked up text data
             liters = st.number_input("Infused Volume (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
             price = st.number_input("Transaction Total Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
         
         if st.button("⚡ Commit Entry to Cloud Matrix", use_container_width=True, type="primary"):
             if odometer > 0 and liters > 0 and price > 0:
-                # Package record dictionary with hidden user_id stamp!
                 new_entry_payload = {
                     "user_id": current_user, 
                     "log_date": log_date.strftime("%Y-%m-%d"),
@@ -179,7 +190,7 @@ if menu_tab:
                     "liters": float(liters),
                     "cost": float(price)
                 }
-                if save_log_to_cloud(new_entry_payload):
+                if commit_to_supabase("fuel_logs", new_entry_payload):
                     st.success("Log safely synced to permanent cloud servers database!")
                     st.rerun()
                 else:
@@ -200,13 +211,12 @@ with leaderboard_tab:
     st.title("🏆 Workspace Efficiency Standings")
     st.caption("Rankings calculated globally via Lifetime Average Mileage.")
     
-    raw_cloud_data = fetch_logs_from_cloud()
+    raw_cloud_data = fetch_from_supabase("fuel_logs")
     
     if raw_cloud_data:
         master_df = pd.DataFrame(raw_cloud_data)
         leaderboard_records = []
         
-        # Loop through each individual user independently to calculate global standings
         for user in master_df['user_id'].unique():
             sub_df = master_df[master_df['user_id'] == user].sort_values("odometer").reset_index(drop=True)
             
@@ -232,4 +242,4 @@ with leaderboard_tab:
         st.info("No logs present across cloud servers.")
 
 # Non-descript master developer signature flag at the base
-st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | core pipeline matrix v2.6</div>", unsafe_allow_html=True)
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | dynamic pipeline matrix v3.0</div>", unsafe_allow_html=True)
