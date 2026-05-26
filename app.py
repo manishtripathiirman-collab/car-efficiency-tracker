@@ -116,10 +116,17 @@ if menu_tab:
     raw_cloud_data = fetch_from_supabase("fuel_logs")
     all_df = pd.DataFrame(raw_cloud_data)
     
-    if not all_df.empty:
-        user_df = all_df[all_df['user_id'] == current_user].copy()
-    else:
-        user_df = pd.DataFrame()
+    # Simple formatting extraction handler for the custom notes tags
+    parsed_logs = []
+    for row in raw_cloud_data:
+        uid = row.get("user_id", "")
+        base_user = uid.split(" [")[0] if " [" in uid else uid
+        
+        # Pull records that strictly belong to the current operator
+        if base_user == current_user:
+            parsed_logs.append(row)
+            
+    user_df = pd.DataFrame(parsed_logs)
 
     # Math Calculation Engine
     if len(user_df) >= 2:
@@ -150,7 +157,6 @@ if menu_tab:
     target_bill_file = None
     
     with st.container(border=True):
-        # Enforcing tight grid parameters so columns stay locked side-by-side even on small viewports
         cam_col, upload_col = st.columns(2, gap="small")
         
         with cam_col:
@@ -169,7 +175,7 @@ if menu_tab:
                 if file_upload:
                     target_bill_file = file_upload
 
-        # Process the chosen file input through Gemini
+        # Process through Gemini
         if target_bill_file is not None:
             api_key = st.secrets.get("GEMINI_API_KEY")
             if not api_key:
@@ -195,7 +201,7 @@ if menu_tab:
                     except Exception as e:
                         st.error(f"Error parsing document text: {e}")
 
-    # --- TELEMETRY FILL FORM ---
+    # --- TELEMETRY FILL FORM WITH RESTORED MAINTENANCE INPUTS ---
     st.markdown("### ⛽ Step 2: Verify & Log Fuel Telemetry")
     with st.container(border=True):
         form_col1, form_col2 = st.columns(2)
@@ -206,10 +212,27 @@ if menu_tab:
             liters = st.number_input("Infused Volume (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
             price = st.number_input("Transaction Total Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
         
+        st.markdown("---")
+        st.markdown("**🛠️ Additional Maintenance Trackers**")
+        m_col1, m_col2 = st.columns(2)
+        with m_col1:
+            air_checked = st.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
+        with m_col2:
+            service_done = st.radio("General Vehicle Service Carried Out?", ["No", "Yes"], horizontal=True)
+        
+        service_cost = 0.0
+        if service_done == "Yes":
+            service_cost = st.number_input("Enter Service Invoice Amount (₹)", min_value=0.0, step=100.0, format="%.2f")
+        
         if st.button("⚡ Commit Entry to Cloud Matrix", use_container_width=True, type="primary"):
             if odometer > 0 and liters > 0 and price > 0:
+                # Intelligently package the extra metrics safely without modifying basic structural columns
+                notes_stamp = f" | Air: {air_checked}"
+                if service_done == "Yes":
+                    notes_stamp += f" | Service Cost: ₹{service_cost}"
+                
                 new_entry_payload = {
-                    "user_id": current_user, 
+                    "user_id": f"{current_user}{notes_stamp}", 
                     "log_date": log_date.strftime("%Y-%m-%d"),
                     "odometer": int(odometer),
                     "liters": float(liters),
@@ -251,27 +274,38 @@ with leaderboard_tab:
     
     raw_cloud_data = fetch_from_supabase("fuel_logs")
     if raw_cloud_data:
-        master_df = pd.DataFrame(raw_cloud_data)
+        # Group handling for leaderboard tracking
         leaderboard_records = []
-        
-        for user in master_df['user_id'].unique():
-            sub_df = master_df[master_df['user_id'] == user].sort_values("odometer").reset_index(drop=True)
-            if len(sub_df) >= 2:
-                sub_df['dist'] = sub_df['odometer'].diff()
-                total_km = sub_df['dist'].sum()
-                total_liters = sub_df['liters'].iloc[1:].sum()
-                
-                if total_liters > 0:
-                    lifetime_avg = total_km / total_liters
-                    leaderboard_records.append({
-                        "Driver": f"👤 {user}",
-                        "Lifetime Average Mileage": f"{lifetime_avg:.2f} km/L",
-                        "Sort_Val": lifetime_avg
-                    })
-        
-        if leaderboard_records:
-            final_leaderboard = pd.DataFrame(leaderboard_records).sort_values("Sort_Val", ascending=False).drop(columns=["Sort_Val"])
-            st.dataframe(final_leaderboard, use_container_width=True, hide_index=True)
+        parsed_all = []
+        for r in raw_cloud_data:
+            uid = r.get("user_id", "")
+            base_user = uid.split(" [")[0] if " [" in uid else uid
+            row_copy = r.copy()
+            row_copy["clean_user"] = base_user
+            parsed_all.append(row_copy)
+            
+        if parsed_all:
+            master_df = pd.DataFrame(parsed_all)
+            for user in master_df['clean_user'].unique():
+                sub_df = master_df[master_df['clean_user'] == user].sort_values("odometer").reset_index(drop=True)
+                if len(sub_df) >= 2:
+                    sub_df['dist'] = sub_df['odometer'].diff()
+                    total_km = sub_df['dist'].sum()
+                    total_liters = sub_df['liters'].iloc[1:].sum()
+                    
+                    if total_liters > 0:
+                        lifetime_avg = total_km / total_liters
+                        leaderboard_records.append({
+                            "Driver": f"👤 {user}",
+                            "Lifetime Average Mileage": f"{lifetime_avg:.2f} km/L",
+                            "Sort_Val": lifetime_avg
+                        })
+            
+            if leaderboard_records:
+                final_leaderboard = pd.DataFrame(leaderboard_records).sort_values("Sort_Val", ascending=False).drop(columns=["Sort_Val"])
+                st.dataframe(final_leaderboard, use_container_width=True, hide_index=True)
+            else:
+                st.info("Insufficient system logs globally to render tournament standings yet.")
         else:
             st.info("Insufficient system logs globally to render tournament standings yet.")
     else:
@@ -304,4 +338,4 @@ if is_admin and admin_tab:
         else:
             st.info("The global log grid is completely empty.")
 
-st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | resilient viewport console v3.9</div>", unsafe_allow_html=True)
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | comprehensive matrix v4.0</div>", unsafe_allow_html=True)
