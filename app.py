@@ -223,7 +223,7 @@ if menu_tab:
             price = st.number_input("Transaction Total Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
         
         st.markdown("---")
-        st.markdown("**🛠_ Additional Maintenance Trackers**")
+        st.markdown("**🛠️ Additional Maintenance Trackers**")
         m_col1, m_col2 = st.columns(2)
         with m_col1:
             air_checked = st.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
@@ -259,10 +259,9 @@ if menu_tab:
     st.markdown("### 📋 Your Personal Log Ledger")
     if not user_df.empty:
         clean_user_df = user_df.sort_values("log_date", ascending=False)
-        # Display table with contextual indicators rendered natively 
         st.dataframe(clean_user_df[['log_date', 'odometer', 'liters', 'cost', 'Air Checked', 'Service Cost']], use_container_width=True, hide_index=True)
         
-        with st.expander("🗑_ Delete/Remove a Log Record"):
+        with st.expander("🗑️ Delete/Remove a Log Record"):
             row_to_delete = st.selectbox(
                 "Select one of your log entries to delete permanently:",
                 options=clean_user_df.to_dict(orient="records"),
@@ -280,4 +279,71 @@ if menu_tab:
 # --- TAB 2: GLOBAL LEADERBOARD STANDINGS ---
 with leaderboard_tab:
     st.title("🏆 Workspace Efficiency Standings")
-    st.caption("Rankings calculated globally via Lifetime Average Mileage
+    st.caption("Rankings calculated globally via Lifetime Average Mileage.")
+    
+    raw_cloud_data = fetch_from_supabase("fuel_logs")
+    if raw_cloud_data:
+        leaderboard_records = []
+        parsed_all = []
+        for r in raw_cloud_data:
+            uid = r.get("user_id", "")
+            base_user = uid.split(" | ")[0] if " | " in uid else uid
+            row_copy = r.copy()
+            row_copy["clean_user"] = base_user
+            parsed_all.append(row_copy)
+            
+        if parsed_all:
+            master_df = pd.DataFrame(parsed_all)
+            for user in master_df['clean_user'].unique():
+                sub_df = master_df[master_df['clean_user'] == user].sort_values("odometer").reset_index(drop=True)
+                if len(sub_df) >= 2:
+                    sub_df['dist'] = sub_df['odometer'].diff()
+                    total_km = sub_df['dist'].sum()
+                    total_liters = sub_df['liters'].iloc[1:].sum()
+                    
+                    if total_liters > 0:
+                        lifetime_avg = total_km / total_liters
+                        leaderboard_records.append({
+                            "Driver": f"👤 {user}",
+                            "Lifetime Average Mileage": f"{lifetime_avg:.2f} km/L",
+                            "Sort_Val": lifetime_avg
+                        })
+            
+            if leaderboard_records:
+                final_leaderboard = pd.DataFrame(leaderboard_records).sort_values("Sort_Val", ascending=False).drop(columns=["Sort_Val"])
+                st.dataframe(final_leaderboard, use_container_width=True, hide_index=True)
+            else:
+                st.info("Insufficient system logs globally to render tournament standings yet.")
+        else:
+            st.info("Insufficient system logs globally to render tournament standings yet.")
+    else:
+        st.info("No logs present across cloud servers.")
+
+# --- TAB 3: GLOBAL ADMIN CONTROL COCKPIT (RESTRICTED TO MANTRI ONLY) ---
+if is_admin and admin_tab:
+    with admin_tab:
+        st.title("🛠️ Global Admin System Cockpit")
+        st.caption("Elevated access active. You have full visibility over all drivers across the country.")
+        
+        raw_cloud_data = fetch_from_supabase("fuel_logs")
+        if raw_cloud_data:
+            admin_df = pd.DataFrame(raw_cloud_data).sort_values("log_date", ascending=False)
+            st.markdown("### 🌍 Comprehensive System Master Ledger")
+            st.dataframe(admin_df[['id', 'user_id', 'log_date', 'odometer', 'liters', 'cost']], use_container_width=True, hide_index=True)
+            
+            st.markdown("### 🚨 Global Row Override Control")
+            admin_row_to_delete = st.selectbox(
+                "Select ANY driver log entry to force delete:",
+                options=admin_df.to_dict(orient="records"),
+                format_func=lambda x: f"[{x['user_id'].upper()}] Date: {x['log_date']} | Odo: {x['odometer']} km | Cost: ₹{x['cost']}"
+            )
+            if st.button("Force Administrative Delete", type="primary", use_container_width=True):
+                if delete_from_supabase("fuel_logs", admin_row_to_delete["id"]):
+                    st.success(f"Administrative override successful. Row ID {admin_row_to_delete['id']} cleared.")
+                    st.rerun()
+                else:
+                    st.error("Admin Instruction Error: Could not delete row.")
+        else:
+            st.info("The global log grid is completely empty.")
+
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | core master platform v4.1</div>", unsafe_allow_html=True)
