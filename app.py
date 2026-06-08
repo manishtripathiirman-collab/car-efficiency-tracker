@@ -152,11 +152,14 @@ if menu_tab:
     
     # Process metadata values stored inside user string parameters safely
     parsed_logs = []
+    all_user_dates = [] # Tracks logged transaction strings specifically for current operator duplication checking
+    
     for row in raw_cloud_data:
         uid = row.get("user_id", "")
         base_user = uid.split(" | ")[0] if " | " in uid else uid
         
         if base_user == current_user:
+            all_user_dates.append(row.get("log_date"))
             row_copy = row.copy()
             row_copy["Air Checked"] = "Yes" if "Air: Yes" in uid else "No"
             row_copy["Full Tank?"] = "Yes" if "Full Tank: Yes" in uid else "No"
@@ -255,7 +258,7 @@ if menu_tab:
                     except Exception as e:
                         st.error(f"Error parsing document text: {e}")
 
-    # --- TELEMETRY FILL FORM WITH FULL TANK INTEGRATION ---
+    # --- TELEMETRY FILL FORM WITH LOCKOUT SYSTEM ---
     st.markdown("### ⛽ Step 2: Verify & Log Fuel Telemetry")
     with st.container(border=True):
         form_col1, form_col2 = st.columns(2)
@@ -280,26 +283,38 @@ if menu_tab:
         if service_done == "Yes":
             service_cost = st.number_input("Enter Service Invoice Amount (₹)", min_value=0.0, step=100.0, format="%.2f")
         
+        selected_date_str = log_date.strftime("%Y-%m-%d")
+        
         if st.button("⚡ Commit Entry to Cloud Matrix", use_container_width=True, type="primary"):
-            if odometer > 0 and liters > 0 and price > 0:
+            # 🚨 DYNAMIC DAILY DUPLICATION PROTECTION INTERCEPTOR 🚨
+            if selected_date_str in all_user_dates:
+                st.error(f"❌ Entry Blocked: You have already submitted fuel records for {selected_date_str}. To correct errors, delete today's previous entry from the ledger box below.")
+            elif odometer <= 0 or liters <= 0 or price <= 0:
+                st.error("Validation Halt: Readings must be set higher than zero.")
+            else:
                 notes_stamp = f" | Air: {air_checked} | Full Tank: {full_tank_filled}"
                 if service_done == "Yes":
                     notes_stamp += f" | Service Cost: ₹{service_cost:.2f}"
                 
                 new_entry_payload = {
                     "user_id": f"{current_user}{notes_stamp}", 
-                    "log_date": log_date.strftime("%Y-%m-%d"),
+                    "log_date": selected_date_str,
                     "odometer": int(odometer),
                     "liters": float(liters),
                     "cost": float(price)
                 }
-                if commit_to_supabase("fuel_logs", new_entry_payload):
-                    st.success("Log safely synced to permanent cloud servers database!")
-                    st.rerun()
-                else:
-                    st.error("Network Error: Cloud connection timeout.")
-            else:
-                st.error("Validation Halt: Readings must be set higher than zero.")
+                
+                with st.spinner("Pushing record payload to system matrices..."):
+                    if commit_to_supabase("fuel_logs", new_entry_payload):
+                        # 🎉 VISUAL DATA CONFIRMATION GATEWAY 🎉
+                        st.toast("✅ Cloud Synchronization Confirmed!", icon="🚀")
+                        st.success(f"🎉 **Data successfully uploaded for {selected_date_str}!** Ledger entry logged under operator profile '{current_user.upper()}'.")
+                        st.balloons()
+                        # Allow user to view confirmation metrics before screen refresh sequences occur
+                        st.info("Refreshing local ledger matrices...")
+                        st.rerun()
+                    else:
+                        st.error("Network Error: Cloud connection timeout.")
 
     # --- HISTORICAL TRANSACTIONS LEDGER DISPLAY ---
     st.markdown("### 📋 Your Personal Log Ledger")
@@ -401,4 +416,4 @@ if is_admin and admin_tab:
         else:
             st.info("The global log grid is completely empty.")
 
-st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | elite full-tank edition v5.1</div>", unsafe_allow_html=True)
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | strict integrity edition v5.2</div>", unsafe_allow_html=True)
