@@ -170,3 +170,21 @@ if menu_tab:
                 row_copy["Service Cost"] = "No"
                 
             parsed_logs.append(row_copy)
+            
+    user_df = pd.DataFrame(parsed_logs)
+
+    # --- REFACTORED TRIP-LEVEL TANK MATH ENGINE ---
+    avg_mileage, cost_per_km = 0.0, 0.0
+    if len(user_df) >= 2:
+        user_df = user_df.sort_values("odometer").reset_index(drop=True)
+        user_df['distance_driven'] = user_df['odometer'].diff()
+        
+        valid_tank_distances = []
+        valid_tank_liters = []
+        
+        for i in range(1, len(user_df)):
+            if user_df.iloc[i]["Full Tank?"] == "Yes" and user_df.iloc[i-1]["Full Tank?"] == "Yes":
+                valid_tank_distances.append(user_df.iloc[i]["distance_driven"])
+                valid_tank_liters.append(user_df.iloc[i]["liters"])
+        
+        if sum(valid_tank_
