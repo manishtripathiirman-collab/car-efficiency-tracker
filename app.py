@@ -8,6 +8,38 @@ import requests
 # Set up clean mobile-first viewport architecture
 st.set_page_config(page_title="EcoSport Team Cockpit", page_icon="⚡", layout="centered")
 
+# --- PREMIUM DASHBOARD CUSTOM THEME INJECTION ---
+st.markdown("""
+    <style>
+        /* Main application container styling */
+        .stApp {
+            background-color: #0e1117;
+        }
+        /* Custom styling for primary action buttons */
+        div.stButton > button:first-child {
+            background-color: #ff4b4b !important;
+            color: white !important;
+            border: none !important;
+            font-weight: bold !important;
+            border-radius: 8px !important;
+            padding: 0.5rem 1rem !important;
+            transition: all 0.3s ease;
+        }
+        div.stButton > button:first-child:hover {
+            background-color: #ff3333 !important;
+            transform: scale(1.01);
+        }
+        /* Style for metric cards background */
+        [data-testid="stMetricContainer"] {
+            background-color: #1a1f2c;
+            border: 1px solid #2d3748;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- INITIALIZE CONNECTION TO SUPABASE VIA REST API ---
 SUPABASE_URL = st.secrets.get("SUPABASE_URL")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
@@ -44,9 +76,15 @@ def delete_from_supabase(table_name, row_id):
     except Exception:
         return False
 
-# --- DYNAMIC MULTI-USER IDENTITY PORTAL ---
+# --- FIXED AUTOLOGIN PERSISTENCE LAYER ---
+# Using streamlit query parameters to act as a permanent local device session cookie
 if "logged_in_user" not in st.session_state:
-    st.session_state.logged_in_user = None
+    # Check if a saved operator tag is already written to the browser tab query string
+    saved_session = st.query_params.get("operator")
+    if saved_session:
+        st.session_state.logged_in_user = saved_session
+    else:
+        st.session_state.logged_in_user = None
 
 if st.session_state.logged_in_user is None:
     st.title("🔐 Fleet Gateway Portal")
@@ -70,7 +108,9 @@ if st.session_state.logged_in_user is None:
                     st.warning("Please complete both access fields.")
                 elif reg_username in user_credentials_map and user_credentials_map[reg_username] == reg_password:
                     st.session_state.logged_in_user = reg_username
-                    st.success(f"Access Granted. Welcome back.")
+                    # Write the session cookie token directly to the browser storage link parameters
+                    st.query_params["operator"] = reg_username
+                    st.success(f"Access Granted. Remembering device credentials...")
                     st.rerun()
                 else:
                     st.error("Authentication Failure: Invalid credentials.")
@@ -106,23 +146,23 @@ admin_tab = tabs[2] if is_admin else None
 
 # --- TAB 1: THE CORE INDIVIDUAL DRIVER CONSOLE ---
 if menu_tab:
-    st.title(f"⚡ Welcome, {current_user}")
-    st.caption(f"Secure Workspace Session Active | Connected to Cloud Ledger")
+    st.title(f"⚡ Welcome, {current_user.upper()}")
+    st.caption(f"Connected Device Securely Stamped | Persistent Session Active")
     
-    if st.sidebar.button("🔒 Secure Sign-Out", use_container_width=True):
+    # Sign-out function completely flushes device cache rules parameters
+    if st.sidebar.button("🔒 Secure Sign-Out / Forget Me", use_container_width=True):
         st.session_state.logged_in_user = None
+        st.query_params.clear()
         st.rerun()
 
     raw_cloud_data = fetch_from_supabase("fuel_logs")
     
-    # Process metadata payload values stored inside the user string matrix safely
     parsed_logs = []
     for row in raw_cloud_data:
         uid = row.get("user_id", "")
         base_user = uid.split(" | ")[0] if " | " in uid else uid
         
         if base_user == current_user:
-            # Reconstruct contextual columns dynamically for display lookups
             row_copy = row.copy()
             row_copy["Air Checked"] = "Yes" if "Air: Yes" in uid else "No"
             
@@ -153,12 +193,12 @@ if menu_tab:
         avg_mileage, cost_per_km = 0.0, 0.0
 
     st.markdown("### 📊 Your Performance Analytics")
-    with st.container(border=True):
+    with st.container():
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            st.metric(label="Your Average Mileage", value=f"{avg_mileage:.2f} km/L")
+            st.metric(label="📊 Your Average Mileage", value=f"{avg_mileage:.2f} km/L")
         with col_m2:
-            st.metric(label="Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
+            st.metric(label="💸 Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
 
     # --- LIVE ADJACENT SCANNER & ATTACHMENT PORTS ---
     st.markdown("### 📷 Step 1: Scan Bill via Vision AI")
@@ -304,7 +344,7 @@ with leaderboard_tab:
                     if total_liters > 0:
                         lifetime_avg = total_km / total_liters
                         leaderboard_records.append({
-                            "Driver": f"👤 {user}",
+                            "Driver": f"👤 {user.upper()}",
                             "Lifetime Average Mileage": f"{lifetime_avg:.2f} km/L",
                             "Sort_Val": lifetime_avg
                         })
@@ -346,4 +386,4 @@ if is_admin and admin_tab:
         else:
             st.info("The global log grid is completely empty.")
 
-st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | core master platform v4.1</div>", unsafe_allow_html=True)
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | elite edition platform v5.0</div>", unsafe_allow_html=True)
