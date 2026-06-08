@@ -173,7 +173,7 @@ if menu_tab:
             
     user_df = pd.DataFrame(parsed_logs)
 
-    # --- REFACTORED TRIP-LEVEL TANK MATH ENGINE ---
+    # --- TRIP-LEVEL TANK MATH ENGINE ---
     avg_mileage, cost_per_km = 0.0, 0.0
     if len(user_df) >= 2:
         user_df = user_df.sort_values("odometer").reset_index(drop=True)
@@ -187,4 +187,219 @@ if menu_tab:
                 valid_tank_distances.append(user_df.iloc[i]["distance_driven"])
                 valid_tank_liters.append(user_df.iloc[i]["liters"])
         
-        if sum(valid_tank_
+        if sum(valid_tank_distances) > 0 and sum(valid_tank_liters) > 0:
+            avg_mileage = sum(valid_tank_distances) / sum(valid_tank_liters)
+        else:
+            total_tracked_km = user_df['distance_driven'].sum()
+            avg_mileage = total_tracked_km / user_df['liters'].iloc[1:].sum() if user_df['liters'].iloc[1:].sum() > 0 else 0.0
+            
+        total_km = user_df['distance_driven'].sum()
+        total_money = user_df['cost'].sum()
+        cost_per_km = total_money / total_km if total_km > 0 else 0.0
+
+    st.markdown("### 📊 Your Performance Analytics")
+    with st.container():
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.metric(label="📊 True Tank-to-Tank Mileage", value=f"{avg_mileage:.2f} km/L")
+        with col_m2:
+            st.metric(label="💸 Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
+
+    # --- LIVE ADJACENT SCANNER & ATTACHMENT PORTS ---
+    st.markdown("### 📷 Step 1: Scan Bill via Vision AI")
+    scanned_liters = 0.0
+    scanned_price = 0.0
+    target_bill_file = None
+    
+    with st.container(border=True):
+        cam_col, upload_col = st.columns(2, gap="small")
+        
+        with cam_col:
+            st.markdown("**Option A: Camera Scanner**")
+            activate_camera = st.checkbox("Turn On Camera Hardware", value=False)
+            if activate_camera:
+                camera_snap = st.camera_input("Take live photo of receipt")
+                if camera_snap:
+                    target_bill_file = camera_snap
+                
+        with upload_col:
+            st.markdown("**Option B: Document Upload**")
+            activate_upload = st.checkbox("Turn On File Attachment", value=False)
+            if activate_upload:
+                file_upload = st.file_uploader("Upload receipt image copy", type=["png", "jpg", "jpeg"])
+                if file_upload:
+                    target_bill_file = file_upload
+
+        if target_bill_file is not None:
+            api_key = st.secrets.get("GEMINI_API_KEY")
+            if not api_key:
+                st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to settings.")
+            else:
+                with st.spinner("⚡ AI is scanning document strings..."):
+                    try:
+                        img = Image.open(target_bill_file)
+                        from google import genai
+                        client = genai.Client(api_key=api_key)
+                        prompt = """
+                        Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
+                        Return output strictly formatted as JSON object with keys "liters" and "total_cost".
+                        """
+                        response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
+                        cleaned_text = response.text.replace("```json", "").replace("
+```", "").strip()
+                        data = json.loads(cleaned_text)
+                        
+                        scanned_liters = float(data.get("liters", 0.0))
+                        scanned_price = float(data.get("total_cost", 0.0))
+                        
+                        st.success(f"🤖 AI Scanner Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
+                    except Exception as e:
+                        st.error(f"Error parsing document text: {e}")
+
+    # --- TELEMETRY FILL FORM WITH FULL TANK INTEGRATION ---
+    st.markdown("### ⛽ Step 2: Verify & Log Fuel Telemetry")
+    with st.container(border=True):
+        form_col1, form_col2 = st.columns(2)
+        with form_col1:
+            log_date = st.date_input("Transaction Date Stamping", value=datetime.today())
+            odometer = st.number_input("Odometer Tracker (km)", min_value=0, step=1)
+        with form_col2:
+            liters = st.number_input("Infused Volume (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
+            price = st.number_input("Transaction Total Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
+        
+        st.markdown("---")
+        st.markdown("**🛠️ Additional Maintenance & Fuel Trackers**")
+        m_col1, m_col2, m_col3 = st.columns(3)
+        with m_col1:
+            full_tank_filled = st.radio("Filled Fuel to Full Tank?", ["No", "Yes"], horizontal=True)
+        with m_col2:
+            air_checked = st.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
+        with m_col3:
+            service_done = st.radio("Vehicle Service Done?", ["No", "Yes"], horizontal=True)
+        
+        service_cost = 0.0
+        if service_done == "Yes":
+            service_cost = st.number_input("Enter Service Invoice Amount (₹)", min_value=0.0, step=100.0, format="%.2f")
+        
+        if st.button("⚡ Commit Entry to Cloud Matrix", use_container_width=True, type="primary"):
+            if odometer > 0 and liters > 0 and price > 0:
+                notes_stamp = f" | Air: {air_checked} | Full Tank: {full_tank_filled}"
+                if service_done == "Yes":
+                    notes_stamp += f" | Service Cost: ₹{service_cost:.2f}"
+                
+                new_entry_payload = {
+                    "user_id": f"{current_user}{notes_stamp}", 
+                    "log_date": log_date.strftime("%Y-%m-%d"),
+                    "odometer": int(odometer),
+                    "liters": float(liters),
+                    "cost": float(price)
+                }
+                if commit_to_supabase("fuel_logs", new_entry_payload):
+                    st.success("Log safely synced to permanent cloud servers database!")
+                    st.rerun()
+                else:
+                    st.error("Network Error: Cloud connection timeout.")
+            else:
+                st.error("Validation Halt: Readings must be set higher than zero.")
+
+    # --- HISTORICAL TRANSACTIONS LEDGER DISPLAY ---
+    st.markdown("### 📋 Your Personal Log Ledger")
+    if not user_df.empty:
+        clean_user_df = user_df.sort_values("log_date", ascending=False)
+        st.dataframe(clean_user_df[['log_date', 'odometer', 'liters', 'cost', 'Full Tank?', 'Air Checked', 'Service Cost']], use_container_width=True, hide_index=True)
+        
+        with st.expander("🗑️ Delete/Remove a Log Record"):
+            row_to_delete = st.selectbox(
+                "Select one of your log entries to delete permanently:",
+                options=clean_user_df.to_dict(orient="records"),
+                format_func=lambda x: f"Date: {x['log_date']} | Odo: {x['odometer']} km | Cost: ₹{x['cost']}"
+            )
+            if st.button("Confirm Deletion from Cloud", type="secondary", use_container_width=True):
+                if delete_from_supabase("fuel_logs", row_to_delete["id"]):
+                    st.success("Entry successfully removed from your personal ledger.")
+                    st.rerun()
+                else:
+                    st.error("Error executing row delete instruction.")
+    else:
+        st.info("Your individual garage registry sheet is currently vacant.")
+
+# --- TAB 2: GLOBAL LEADERBOARD STANDINGS ---
+with leaderboard_tab:
+    st.title("🏆 Workspace Efficiency Standings")
+    st.caption("Rankings calculated globally via Lifetime Average Mileage.")
+    
+    raw_cloud_data = fetch_from_supabase("fuel_logs")
+    if raw_cloud_data:
+        leaderboard_records = []
+        parsed_all = []
+        for r in raw_cloud_data:
+            uid = r.get("user_id", "")
+            base_user = uid.split(" | ")[0] if " | " in uid else uid
+            row_copy = r.copy()
+            row_copy["clean_user"] = base_user
+            row_copy["ft_flag"] = "Yes" if "Full Tank: Yes" in uid else "No"
+            parsed_all.append(row_copy)
+            
+        if parsed_all:
+            master_df = pd.DataFrame(parsed_all)
+            for user in master_df['clean_user'].unique():
+                sub_df = master_df[master_df['clean_user'] == user].sort_values("odometer").reset_index(drop=True)
+                if len(sub_df) >= 2:
+                    sub_df['dist'] = sub_df['odometer'].diff()
+                    
+                    v_dist, v_lit = [], []
+                    for i in range(1, len(sub_df)):
+                        if sub_df.iloc[i]["ft_flag"] == "Yes" and sub_df.iloc[i-1]["ft_flag"] == "Yes":
+                            v_dist.append(sub_df.iloc[i]["dist"])
+                            v_lit.append(sub_df.iloc[i]["liters"])
+                            
+                    if sum(v_dist) > 0 and sum(v_lit) > 0:
+                        final_avg = sum(v_dist) / sum(v_lit)
+                    else:
+                        final_avg = sub_df['dist'].sum() / sub_df['liters'].iloc[1:].sum() if sub_df['liters'].iloc[1:].sum() > 0 else 0.0
+                        
+                    if final_avg > 0:
+                        leaderboard_records.append({
+                            "Driver": f"👤 {user.upper()}",
+                            "Lifetime Average Mileage": f"{final_avg:.2f} km/L",
+                            "Sort_Val": final_avg
+                        })
+            
+            if leaderboard_records:
+                final_leaderboard = pd.DataFrame(leaderboard_records).sort_values("Sort_Val", ascending=False).drop(columns=["Sort_Val"])
+                st.dataframe(final_leaderboard, use_container_width=True, hide_index=True)
+            else:
+                st.info("Insufficient system logs globally to render tournament standings yet.")
+        else:
+            st.info("Insufficient system logs globally to render tournament standings yet.")
+    else:
+        st.info("No logs present across cloud servers.")
+
+# --- TAB 3: GLOBAL ADMIN CONTROL COCKPIT (RESTRICTED TO MANTRI ONLY) ---
+if is_admin and admin_tab:
+    with admin_tab:
+        st.title("🛠️ Global Admin System Cockpit")
+        st.caption("Elevated access active. You have full visibility over all drivers across the country.")
+        
+        raw_cloud_data = fetch_from_supabase("fuel_logs")
+        if raw_cloud_data:
+            admin_df = pd.DataFrame(raw_cloud_data).sort_values("log_date", ascending=False)
+            st.markdown("### 🌍 Comprehensive System Master Ledger")
+            st.dataframe(admin_df[['id', 'user_id', 'log_date', 'odometer', 'liters', 'cost']], use_container_width=True, hide_index=True)
+            
+            st.markdown("### 🚨 Global Row Override Control")
+            admin_row_to_delete = st.selectbox(
+                "Select ANY driver log entry to force delete:",
+                options=admin_df.to_dict(orient="records"),
+                format_func=lambda x: f"[{x['user_id'].upper()}] Date: {x['log_date']} | Odo: {x['odometer']} km | Cost: ₹{x['cost']}"
+            )
+            if st.button("Force Administrative Delete", type="primary", use_container_width=True):
+                if delete_from_supabase("fuel_logs", admin_row_to_delete["id"]):
+                    st.success(f"Administrative override successful. Row ID {admin_row_to_delete['id']} cleared.")
+                    st.rerun()
+                else:
+                    st.error("Admin Instruction Error: Could not delete row.")
+        else:
+            st.info("The global log grid is completely empty.")
+
+st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | elite full-tank edition v5.1</div>", unsafe_allow_html=True)
