@@ -4,6 +4,7 @@ from datetime import datetime
 from PIL import Image
 import json
 import requests
+import base64
 
 # Set up clean mobile-first viewport architecture
 st.set_page_config(page_title="EcoSport Team Cockpit", page_icon="⚡", layout="centered")
@@ -11,424 +12,160 @@ st.set_page_config(page_title="EcoSport Team Cockpit", page_icon="⚡", layout="
 # --- PREMIUM DASHBOARD CUSTOM THEME INJECTION ---
 st.markdown("""
     <style>
-        .stApp {
-            background-color: #0e1117;
-        }
+        .stApp { background-color: #0e1117; }
         div.stButton > button:first-child {
-            background-color: #ff4b4b !important;
-            color: white !important;
-            border: none !important;
-            font-weight: bold !important;
-            border-radius: 8px !important;
-            padding: 0.5rem 1rem !important;
-            transition: all 0.3s ease;
-        }
-        div.stButton > button:first-child:hover {
-            background-color: #ff3333 !important;
-            transform: scale(1.01);
+            background-color: #ff4b4b !important; color: white !important;
+            border: none !important; font-weight: bold !important;
+            border-radius: 8px !important; padding: 0.5rem 1rem !important;
         }
         [data-testid="stMetricContainer"] {
-            background-color: #1a1f2c;
-            border: 1px solid #2d3748;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            background-color: #1a1f2c; border: 1px solid #2d3748;
+            padding: 15px; border-radius: 10px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- INITIALIZE CONNECTION TO SUPABASE VIA REST API ---
-SUPABASE_URL = st.secrets.get("SUPABASE_URL")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
+# --- GITHUB FILE STORAGE CONFIGURATION ---
+# Add your GITHUB_TOKEN to your Streamlit App Secrets
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN")
+REPO_OWNER = "manishtripathiirman-collab"
+REPO_NAME = "car-efficiency-tracker"
+FILE_PATH = "fuel_logs.json"
+BRANCH = "main"
+
 HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=representation"
+    "Authorization": f"token {GITHUB_TOKEN}" if GITHUB_TOKEN else "",
+    "Accept": "application/vnd.github.v3+json"
 }
 
-def fetch_from_supabase(table_name):
-    """Pulls raw logs from designated cloud tables safely"""
+def fetch_from_github():
+    """Reads the permanent logs file directly from your GitHub repository"""
+    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}?ref={BRANCH}"
     try:
-        response = requests.get(f"{SUPABASE_URL}/rest/v1/{table_name}?select=*", headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
-            return response.json()
+            content_data = response.json()
+            file_content = base64.b64decode(content_data["content"]).decode("utf-8")
+            return json.loads(file_content), content_data["sha"]
     except Exception:
         pass
-    return []
+    return [], None
 
-def commit_to_supabase(table_name, payload):
-    """Inserts a fresh data payload row directly into a cloud table"""
-    try:
-        response = requests.post(f"{SUPABASE_URL}/rest/v1/{table_name}", headers=HEADERS, json=payload, timeout=10)
-        return response.status_code in [200, 201]
-    except Exception:
+def commit_to_github(data_list, sha=None):
+    """Writes the updated logs back to your GitHub repository file automatically"""
+    if not GITHUB_TOKEN:
+        st.error("⚠️ App Secret Missing: Please add 'GITHUB_TOKEN' to settings.")
         return False
+        
+    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
+    updated_json = json.dumps(data_list, indent=4)
+    encoded_content = base64.b64encode(updated_json.encode("utf-8")).decode("utf-8")
+    
+    payload = {
+        "message": f"Automated telemetry sync: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "content": encoded_content,
+        "branch": BRANCH
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    response = requests.put(url, headers=HEADERS, json=payload, timeout=10)
+    return response.status_code in [200, 201]
 
-def delete_from_supabase(table_name, row_id):
-    """Removes a row from the database using its unique identifier ID"""
-    try:
-        response = requests.delete(f"{SUPABASE_URL}/rest/v1/{table_name}?id=eq.{row_id}", headers=HEADERS, timeout=10)
-        return response.status_code in [200, 204]
-    except Exception:
-        return False
+# --- USER IDENTITY ---
+current_user = st.query_params.get("operator", "mantri").lower()
 
-# --- DYNAMIC DEVICE AUTOLOGIN PERSISTENCE LAYER ---
-if "logged_in_user" not in st.session_state:
-    saved_session = st.query_params.get("operator")
-    if saved_session:
-        st.session_state.logged_in_user = saved_session
+# --- REPOSITORIES DATA LAYER ---
+raw_cloud_data, current_sha = fetch_from_github()
+
+# Process data entries
+parsed_logs = []
+all_user_dates = []
+
+for row in raw_cloud_data:
+    uid = row.get("user_id", "")
+    base_user = uid.split(" | ")[0] if " | " in uid else uid
+    
+    if base_user == current_user:
+        all_user_dates.append(row.get("log_date"))
+        row_copy = row.copy()
+        row_copy["Air Checked"] = "Yes" if "Air: Yes" in uid else "No"
+        row_copy["Full Tank?"] = "Yes" if "Full Tank: Yes" in uid else "No"
+        row_copy["Service Cost"] = f"₹{uid.split('Service Cost: ₹')[1]}" if "Service Cost: ₹" in uid else "No"
+        parsed_logs.append(row_copy)
+        
+user_df = pd.DataFrame(parsed_logs)
+
+# --- PERFORMANCE ANALYTICS MATH ENGINE ---
+avg_mileage, cost_per_km = 0.0, 0.0
+if len(user_df) >= 2:
+    user_df = user_df.sort_values("odometer").reset_index(drop=True)
+    user_df['distance_driven'] = user_df['odometer'].diff()
+    
+    valid_tank_distances = []
+    valid_tank_liters = []
+    for i in range(1, len(user_df)):
+        if user_df.iloc[i]["Full Tank?"] == "Yes" and user_df.iloc[i-1]["Full Tank?"] == "Yes":
+            valid_tank_distances.append(user_df.iloc[i]["distance_driven"])
+            valid_tank_liters.append(user_df.iloc[i]["liters"])
+            
+    if sum(valid_tank_distances) > 0 and sum(valid_tank_liters) > 0:
+        avg_mileage = sum(valid_tank_distances) / sum(valid_tank_liters)
     else:
-        st.session_state.logged_in_user = None
+        avg_mileage = user_df['distance_driven'].sum() / user_df['liters'].iloc[1:].sum() if user_df['liters'].iloc[1:].sum() > 0 else 0.0
+        
+    cost_per_km = user_df['cost'].sum() / user_df['distance_driven'].sum() if user_df['distance_driven'].sum() > 0 else 0.0
 
-if st.session_state.logged_in_user is None:
-    st.title("🔐 Fleet Gateway Portal")
-    st.caption("Sign in to your console or provision a new user registry record.")
+st.title(f"⚡ Welcome, {current_user.upper()}")
+st.markdown("### 📊 Your Performance Analytics")
+col_m1, col_m2 = st.columns(2)
+col_m1.metric(label="📊 True Tank-to-Tank Mileage", value=f"{avg_mileage:.2f} km/L")
+col_m2.metric(label="💸 Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
+
+# --- DATA ENTRY FORM ---
+st.markdown("### ⛽ Step 1: Verify & Log Fuel Telemetry")
+with st.container(border=True):
+    form_col1, form_col2 = st.columns(2)
+    log_date = form_col1.date_input("Transaction Date Stamping", value=datetime.today())
+    odometer = form_col1.number_input("Odometer Tracker (km)", min_value=0, step=1)
+    liters = form_col2.number_input("Infused Volume (Liters)", min_value=0.0, step=0.1, format="%.2f")
+    price = form_col2.number_input("Transaction Total Value (₹)", min_value=0.0, step=10.0)
     
-    gate_mode = st.radio("Choose Gateway Action:", ["Sign-In Existing Operator", "Register New Driver Account"], horizontal=True)
+    st.markdown("---")
+    m_col1, m_col2, m_col3 = st.columns(3)
+    full_tank_filled = m_col1.radio("Filled Fuel to Full Tank?", ["No", "Yes"], horizontal=True)
+    air_checked = m_col2.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
+    service_done = m_col3.radio("Vehicle Service Done?", ["No", "Yes"], horizontal=True)
     
-    with st.container(border=True):
-        reg_username = st.text_input("Operator Username").strip().lower()
-        reg_password = st.text_input("Security Passkey", type="password")
-        
-        raw_users = fetch_from_supabase("app_users")
-        user_credentials_map = {row["username"]: row["passkey"] for row in raw_users}
-        
-        if "mantri" not in user_credentials_map:
-            user_credentials_map["mantri"] = "petrol123"
-        
-        if gate_mode == "Sign-In Existing Operator":
-            if st.button("Authenticate Identity", use_container_width=True, type="primary"):
-                if not reg_username or not reg_password:
-                    st.warning("Please complete both access fields.")
-                elif reg_username in user_credentials_map and user_credentials_map[reg_username] == reg_password:
-                    st.session_state.logged_in_user = reg_username
-                    st.query_params["operator"] = reg_username
-                    st.success(f"Access Granted. Remembering device credentials...")
+    selected_date_str = log_date.strftime("%Y-%m-%d")
+    
+    if st.button("⚡ Commit Entry to GitHub Repository", use_container_width=True, type="primary"):
+        if selected_date_str in all_user_dates:
+            st.error(f"❌ Entry Blocked: You have already submitted fuel records for {selected_date_str}.")
+        elif odometer <= 0 or liters <= 0 or price <= 0:
+            st.error("Validation Halt: Readings must be set higher than zero.")
+        else:
+            notes_stamp = f" | Air: {air_checked} | Full Tank: {full_tank_filled}"
+            new_row = {
+                "user_id": f"{current_user}{notes_stamp}", 
+                "log_date": selected_date_str,
+                "odometer": int(odometer),
+                "liters": float(liters),
+                "cost": float(price)
+            }
+            raw_cloud_data.append(new_row)
+            
+            with st.spinner("Pushing record directly to GitHub file ledger..."):
+                if commit_to_github(raw_cloud_data, current_sha):
+                    st.success(f"🎉 Data successfully committed directly back into your GitHub repository!")
+                    st.balloons()
                     st.rerun()
                 else:
-                    st.error("Authentication Failure: Invalid credentials.")
-                    
-        elif gate_mode == "Register New Driver Account":
-            st.caption("⚠️ Your password will be saved securely to your cloud database.")
-            if st.button("🚀 Provision New Account", use_container_width=True, type="primary"):
-                if len(reg_username) < 3 or len(reg_password) < 4:
-                    st.error("Account Policy: Username must be ≥3 characters, Passkey ≥4 characters.")
-                elif reg_username in user_credentials_map:
-                    st.error("Registry Collision: This username is already claimed.")
-                else:
-                    user_payload = {"username": reg_username, "passkey": reg_password}
-                    if commit_to_supabase("app_users", user_payload):
-                        st.success(f"Success! Account '{reg_username}' provisioned. Switch to 'Sign-In' to log in.")
-                    else:
-                        st.error("Database error connecting to storage vault.")
-                        
-    st.stop()
+                    st.error("Error executing repository commit file write.")
 
-current_user = st.session_state.logged_in_user
-is_admin = (current_user == "mantri")
-
-# --- TOP INTERACTIVE NAVIGATION WRAPPER ---
-tabs_list = ["🚙 My Telemetry Console", "🏆 Global Performance Leaderboard"]
-if is_admin:
-    tabs_list.append("🛠️ Global Admin Panel")
-
-tabs = st.tabs(tabs_list)
-menu_tab = tabs[0]
-leaderboard_tab = tabs[1]
-admin_tab = tabs[2] if is_admin else None
-
-# --- TAB 1: THE CORE INDIVIDUAL DRIVER CONSOLE ---
-with menu_tab:
-    st.title(f"⚡ Welcome, {current_user.upper()}")
-    st.caption(f"Connected Device Securely Stamped | Persistent Session Active")
-    
-    if st.sidebar.button("🔒 Secure Sign-Out / Forget Me", use_container_width=True):
-        st.session_state.logged_in_user = None
-        st.query_params.clear()
-        st.rerun()
-
-    raw_cloud_data = fetch_from_supabase("fuel_logs")
-    
-    # Process metadata values stored inside user string parameters safely
-    parsed_logs = []
-    all_user_dates = []
-    
-    for row in raw_cloud_data:
-        uid = row.get("user_id", "")
-        base_user = uid.split(" | ")[0] if " | " in uid else uid
-        
-        if base_user == current_user:
-            all_user_dates.append(row.get("log_date"))
-            row_copy = row.copy()
-            row_copy["Air Checked"] = "Yes" if "Air: Yes" in uid else "No"
-            row_copy["Full Tank?"] = "Yes" if "Full Tank: Yes" in uid else "No"
-            
-            if "Service Cost: ₹" in uid:
-                try:
-                    row_copy["Service Cost"] = f"₹{uid.split('Service Cost: ₹')[1]}"
-                except Exception:
-                    row_copy["Service Cost"] = "₹0.00"
-            else:
-                row_copy["Service Cost"] = "No"
-                
-            parsed_logs.append(row_copy)
-            
-    user_df = pd.DataFrame(parsed_logs)
-
-    # --- TRIP-LEVEL TANK MATH ENGINE ---
-    avg_mileage, cost_per_km = 0.0, 0.0
-    if len(user_df) >= 2:
-        user_df = user_df.sort_values("odometer").reset_index(drop=True)
-        user_df['distance_driven'] = user_df['odometer'].diff()
-        
-        valid_tank_distances = []
-        valid_tank_liters = []
-        
-        for i in range(1, len(user_df)):
-            if user_df.iloc[i]["Full Tank?"] == "Yes" and user_df.iloc[i-1]["Full Tank?"] == "Yes":
-                valid_tank_distances.append(user_df.iloc[i]["distance_driven"])
-                valid_tank_liters.append(user_df.iloc[i]["liters"])
-        
-        if sum(valid_tank_distances) > 0 and sum(valid_tank_liters) > 0:
-            avg_mileage = sum(valid_tank_distances) / sum(valid_tank_liters)
-        else:
-            total_tracked_km = user_df['distance_driven'].sum()
-            avg_mileage = total_tracked_km / user_df['liters'].iloc[1:].sum() if user_df['liters'].iloc[1:].sum() > 0 else 0.0
-            
-        total_km = user_df['distance_driven'].sum()
-        total_money = user_df['cost'].sum()
-        cost_per_km = total_money / total_km if total_km > 0 else 0.0
-
-    st.markdown("### 📊 Your Performance Analytics")
-    with st.container():
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            st.metric(label="📊 True Tank-to-Tank Mileage", value=f"{avg_mileage:.2f} km/L")
-        with col_m2:
-            st.metric(label="💸 Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
-
-    # --- LIVE ADJACENT SCANNER & ATTACHMENT PORTS ---
-    st.markdown("### 📷 Step 1: Scan Bill via Vision AI")
-    scanned_liters = 0.0
-    scanned_price = 0.0
-    target_bill_file = None
-    
-    with st.container(border=True):
-        cam_col, upload_col = st.columns(2, gap="small")
-        
-        with cam_col:
-            st.markdown("**Option A: Camera Scanner**")
-            activate_camera = st.checkbox("Turn On Camera Hardware", value=False)
-            if activate_camera:
-                camera_snap = st.camera_input("Take live photo of receipt")
-                if camera_snap:
-                    target_bill_file = camera_snap
-                
-        with upload_col:
-            st.markdown("**Option B: Document Upload**")
-            activate_upload = st.checkbox("Turn On File Attachment", value=False)
-            if activate_upload:
-                file_upload = st.file_uploader("Upload receipt image copy", type=["png", "jpg", "jpeg"])
-                if file_upload:
-                    target_bill_file = file_upload
-
-        if target_bill_file is not None:
-            api_key = st.secrets.get("GEMINI_API_KEY")
-            if not api_key:
-                st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to settings.")
-            else:
-                with st.spinner("⚡ AI is scanning document strings..."):
-                    try:
-                        img = Image.open(target_bill_file)
-                        from google import genai
-                        client = genai.Client(api_key=api_key)
-                        prompt = """
-                        Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
-                        Return output strictly formatted as JSON object with keys "liters" and "total_cost".
-                        """
-                        response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
-                        
-                        raw_ai_text = response.text
-                        
-                        # Anti-Glitched String Layers completely bypassing backtick literals
-                        three_ticks = chr(96) * 3
-                        json_pattern = f"{three_ticks}json"
-                        
-                        cleaned_text = raw_ai_text.replace(json_pattern, "")
-                        cleaned_text = cleaned_text.replace(three_ticks, "")
-                        cleaned_text = cleaned_text.strip()
-                        
-                        data = json.loads(cleaned_text)
-                        scanned_liters = float(data.get("liters", 0.0))
-                        scanned_price = float(data.get("total_cost", 0.0))
-                        
-                        st.success(f"🤖 AI Scanner Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
-                    except Exception as e:
-                        st.error(f"Error parsing document text: {e}")
-
-    # --- TELEMETRY FILL FORM WITH LOCKOUT SYSTEM ---
-    st.markdown("### ⛽ Step 2: Verify & Log Fuel Telemetry")
-    with st.container(border=True):
-        form_col1, form_col2 = st.columns(2)
-        with form_col1:
-            log_date = st.date_input("Transaction Date Stamping", value=datetime.today())
-            odometer = st.number_input("Odometer Tracker (km)", min_value=0, step=1)
-        with form_col2:
-            liters = st.number_input("Infused Volume (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
-            price = st.number_input("Transaction Total Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
-        
-        st.markdown("---")
-        st.markdown("**🛠️ Additional Maintenance & Fuel Trackers**")
-        m_col1, m_col2, m_col3 = st.columns(3)
-        with m_col1:
-            full_tank_filled = st.radio("Filled Fuel to Full Tank?", ["No", "Yes"], horizontal=True)
-        with m_col2:
-            air_checked = st.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
-        with m_col3:
-            service_done = st.radio("Vehicle Service Done?", ["No", "Yes"], horizontal=True)
-        
-        service_cost = 0.0
-        if service_done == "Yes":
-            service_cost = st.number_input("Enter Service Invoice Amount (₹)", min_value=0.0, step=100.0, format="%.2f")
-        
-        selected_date_str = log_date.strftime("%Y-%m-%d")
-        
-        if st.button("⚡ Commit Entry to Cloud Matrix", use_container_width=True, type="primary"):
-            if selected_date_str in all_user_dates:
-                st.error(f"❌ Entry Blocked: You have already submitted fuel records for {selected_date_str}. To correct errors, delete today's previous entry from the ledger box below.")
-            elif odometer <= 0 or liters <= 0 or price <= 0:
-                st.error("Validation Halt: Readings must be set higher than zero.")
-            else:
-                notes_stamp = f" | Air: {air_checked} | Full Tank: {full_tank_filled}"
-                if service_done == "Yes":
-                    notes_stamp += f" | Service Cost: ₹{service_cost:.2f}"
-                
-                new_entry_payload = {
-                    "user_id": f"{current_user}{notes_stamp}", 
-                    "log_date": selected_date_str,
-                    "odometer": int(odometer),
-                    "liters": float(liters),
-                    "cost": float(price)
-                }
-                
-                with st.spinner("Pushing record payload to system matrices..."):
-                    if commit_to_supabase("fuel_logs", new_entry_payload):
-                        st.toast("✅ Cloud Synchronization Confirmed!", icon="🚀")
-                        st.success(f"🎉 **Data successfully uploaded for {selected_date_str}!** Ledger entry logged under operator profile '{current_user.upper()}'.")
-                        st.balloons()
-                        st.info("Refreshing local ledger matrices...")
-                        st.rerun()
-                    else:
-                        st.error("Network Error: Cloud connection timeout.")
-
-    # --- HISTORICAL TRANSACTIONS LEDGER DISPLAY ---
-    st.markdown("### 📋 Your Personal Log Ledger")
-    if not user_df.empty:
-        clean_user_df = user_df.sort_values("log_date", ascending=False)
-        st.dataframe(clean_user_df[['log_date', 'odometer', 'liters', 'cost', 'Full Tank?', 'Air Checked', 'Service Cost']], use_container_width=True, hide_index=True)
-        
-        with st.expander("🗑️ Delete/Remove a Log Record"):
-            row_to_delete = st.selectbox(
-                "Select one of your log entries to delete permanently:",
-                options=clean_user_df.to_dict(orient="records"),
-                format_func=lambda x: f"Date: {x['log_date']} | Odo: {x['odometer']} km | Cost: ₹{x['cost']}"
-            )
-            if st.button("Confirm Deletion from Cloud", type="secondary", use_container_width=True):
-                if delete_from_supabase("fuel_logs", row_to_delete["id"]):
-                    st.success("Entry successfully removed from your personal ledger.")
-                    st.rerun()
-                else:
-                    st.error("Error executing row delete instruction.")
-    else:
-        st.info("Your individual garage registry sheet is currently vacant.")
-
-# --- TAB 2: GLOBAL LEADERBOARD STANDINGS ---
-with leaderboard_tab:
-    st.title("🏆 Workspace Efficiency Standings")
-    st.caption("Rankings calculated globally via Lifetime Average Mileage.")
-    
-    raw_cloud_data = fetch_from_supabase("fuel_logs")
-    if raw_cloud_data:
-        leaderboard_records = []
-        parsed_all = []
-        for r in raw_cloud_data:
-            uid = r.get("user_id", "")
-            base_user = uid.split(" | ")[0] if " | " in uid else uid
-            row_copy = r.copy()
-            row_copy["clean_user"] = base_user
-            row_copy["ft_flag"] = "Yes" if "Full Tank: Yes" in uid else "No"
-            parsed_all.append(row_copy)
-            
-        if parsed_all:
-            master_df = pd.DataFrame(parsed_all)
-            for user in master_df['clean_user'].unique():
-                sub_df = master_df[master_df['clean_user'] == user].sort_values("odometer").reset_index(drop=True)
-                if len(sub_df) >= 2:
-                    sub_df['dist'] = sub_df['odometer'].diff()
-                    
-                    v_dist, v_lit = [], []
-                    for i in range(1, len(sub_df)):
-                        if sub_df.iloc[i]["ft_flag"] == "Yes" and sub_df.iloc[i-1]["ft_flag"] == "Yes":
-                            v_dist.append(sub_df.iloc[i]["dist"])
-                            v_lit.append(sub_df.iloc[i]["liters"])
-                            
-                    if sum(v_dist) > 0 and sum(v_lit) > 0:
-                        final_avg = sum(v_dist) / sum(v_lit)
-                    else:
-                        final_avg = sub_df['dist'].sum() / sub_df['liters'].iloc[1:].sum() if sub_df['liters'].iloc[1:].sum() > 0 else 0.0
-                        
-                    if final_avg > 0:
-                        leaderboard_records.append({
-                            "Driver": f"👤 {user.upper()}",
-                            "Lifetime Average Mileage": f"{final_avg:.2f} km/L",
-                            "Sort_Val": final_avg
-                        })
-            
-            if leaderboard_records:
-                final_leaderboard = pd.DataFrame(leaderboard_records).sort_values("Sort_Val", ascending=False).drop(columns=["Sort_Val"])
-                st.dataframe(final_leaderboard, use_container_width=True, hide_index=True)
-            else:
-                st.info("Insufficient system logs globally to render tournament standings yet.")
-        else:
-            st.info("Insufficient system logs globally to render tournament standings yet.")
-    else:
-        st.info("No logs present across cloud servers.")
-
-# --- TAB 3: GLOBAL ADMIN CONTROL COCKPIT (RESTRICTED TO MANTRI ONLY) ---
-if is_admin and admin_tab:
-    with admin_tab:
-        st.title("🛠️ Global Admin System Cockpit")
-        st.caption("Elevated access active. You have full visibility over all drivers across the country.")
-        
-        raw_cloud_data = fetch_from_supabase("fuel_logs")
-        if raw_cloud_data:
-            admin_df = pd.DataFrame(raw_cloud_data).sort_values("log_date", ascending=False)
-            st.markdown("### 🌍 Comprehensive System Master Ledger")
-            st.dataframe(admin_df[['id', 'user_id', 'log_date', 'odometer', 'liters', 'cost']], use_container_width=True, hide_index=True)
-            
-            st.markdown("### 🚨 Global Row Override Control")
-            
-            admin_list_dicts = admin_df.to_dict(orient="records")
-            def generate_admin_label(x):
-                drv_tag = str(x['user_id']).upper()
-                return f"[{drv_tag}] Date: {x['log_date']} | Odo: {x['odometer']} km"
-
-            admin_row_to_delete = st.selectbox(
-                "Select ANY driver log entry to force delete:",
-                options=admin_list_dicts,
-                format_func=generate_admin_label
-            )
-            
-            if st.button("Force Administrative Delete", type="primary", use_container_width=True):
-                target_id = admin_row_to_delete["id"]
-                if delete_from_supabase("fuel_logs", target_id):
-                    success_msg = f"Administrative override successful. Row ID {target_id} cleared."
-                    st.success(success_msg)
-                    st.rerun()
-                else:
-                    st.error("Admin Instruction Error: Could not delete row.")
-        else:
-            st.info("The global log grid is completely empty.")
-
-st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | strict integrity edition v5.2</div>", unsafe_allow_html=True)
+# --- DISPLAY LOG LEDGER ---
+st.markdown("### 📋 Your Personal Log Ledger")
+if not user_df.empty:
+    st.dataframe(user_df[['log_date', 'odometer', 'liters', 'cost', 'Full Tank?', 'Air Checked', 'Service Cost']], use_container_width=True, hide_index=True)
+else:
+    st.info("Your repository fuel file is currently vacant.")
