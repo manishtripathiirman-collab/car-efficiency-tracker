@@ -250,12 +250,13 @@ with menu_tab:
                         response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
                         
                         raw_ai_text = response.text
-                        json_pattern = "```json"
-                        tick_pattern = "
-```"
+                        
+                        # Anti-Glitched String Layers completely bypassing backtick literals
+                        three_ticks = chr(96) * 3
+                        json_pattern = f"{three_ticks}json"
                         
                         cleaned_text = raw_ai_text.replace(json_pattern, "")
-                        cleaned_text = cleaned_text.replace(tick_pattern, "")
+                        cleaned_text = cleaned_text.replace(three_ticks, "")
                         cleaned_text = cleaned_text.strip()
                         
                         data = json.loads(cleaned_text)
