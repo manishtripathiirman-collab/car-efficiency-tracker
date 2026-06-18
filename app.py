@@ -131,7 +131,7 @@ col_m1, col_m2 = st.columns(2)
 col_m1.metric(label="📊 True Tank-to-Tank Mileage", value=f"{avg_mileage:.2f} km/L")
 col_m2.metric(label="💸 Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
 
-# --- RESTORED CAMERA & FILE ATTACHMENT SCANNER ---
+# --- CAMERA & FILE ATTACHMENT SCANNER ---
 st.markdown("### 📷 Step 1: Scan Bill via Vision AI")
 scanned_liters = 0.0
 scanned_price = 0.0
@@ -165,8 +165,81 @@ with st.container(border=True):
                     img = Image.open(target_bill_file)
                     from google import genai
                     client = genai.Client(api_key=api_key)
-                    prompt = """
-                    Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
-                    Return output strictly formatted as JSON object with keys "liters" and "total_cost".
-                    """
-                    response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
+                    prompt = "Extract volume in liters and total cost in Rupees. Return JSON with keys 'liters' and 'total_cost'."
+                    
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=[img, prompt]
+                    )
+                    
+                    raw_ai_text = response.text
+                    three_ticks = chr(96) * 3
+                    json_pattern = f"{three_ticks}json"
+                    
+                    cleaned_text = raw_ai_text.replace(json_pattern, "")
+                    cleaned_text = cleaned_text.replace(three_ticks, "")
+                    cleaned_text = cleaned_text.strip()
+                    
+                    data = json.loads(cleaned_text)
+                    scanned_liters = float(data.get("liters", 0.0))
+                    scanned_price = float(data.get("total_cost", 0.0))
+                    
+                    st.success(f"🤖 AI Scanner Captured: {scanned_liters}L | Total Bill: ₹ {scanned_price}")
+                except Exception as e:
+                    st.error(f"Error parsing document text: {e}")
+
+# --- VERIFICATION FORM AND ADDITIONAL TRACKERS ---
+st.markdown("### ⛽ Step 2: Verify & Log Fuel Telemetry")
+with st.container(border=True):
+    form_col1, form_col2 = st.columns(2)
+    log_date = form_col1.date_input("Transaction Date Stamping", value=datetime.today())
+    odometer = form_col1.number_input("Odometer Tracker (km)", min_value=0, step=1)
+    liters = form_col2.number_input("Infused Volume (Liters)", min_value=0.0, value=scanned_liters, step=0.1, format="%.2f")
+    price = form_col2.number_input("Transaction Total Value (₹)", min_value=0.0, value=scanned_price, step=10.0)
+    
+    st.markdown("---")
+    st.markdown("**🛠️ Additional Maintenance & Fuel Trackers**")
+    m_col1, m_col2, m_col3 = st.columns(3)
+    full_tank_filled = m_col1.radio("Filled Fuel to Full Tank?", ["No", "Yes"], horizontal=True)
+    air_checked = m_col2.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
+    service_done = m_col3.radio("Vehicle Service Done?", ["No", "Yes"], horizontal=True)
+    
+    service_cost = 0.0
+    if service_done == "Yes":
+        service_cost = st.number_input("Enter Service Invoice Amount (₹)", min_value=0.0, step=100.0, format="%.2f")
+        
+    selected_date_str = log_date.strftime("%Y-%m-%d")
+    
+    if st.button("⚡ Commit Entry to GitHub Repository", use_container_width=True, type="primary"):
+        if selected_date_str in all_user_dates:
+            st.error(f"❌ Entry Blocked: You have already submitted fuel records for {selected_date_str}.")
+        elif odometer <= 0 or liters <= 0 or price <= 0:
+            st.error("Validation Halt: Readings must be set higher than zero.")
+        else:
+            notes_stamp = f" | Air: {air_checked} | Full Tank: {full_tank_filled}"
+            if service_done == "Yes":
+                notes_stamp += f" | Service Cost: ₹{service_cost:.2f}"
+                
+            new_row = {
+                "user_id": f"{current_user}{notes_stamp}", 
+                "log_date": selected_date_str,
+                "odometer": int(odometer),
+                "liters": float(liters),
+                "cost": float(price)
+            }
+            raw_cloud_data.append(new_row)
+            
+            with st.spinner("Pushing record directly to GitHub file ledger..."):
+                if commit_to_github(raw_cloud_data, current_sha):
+                    st.success(f"🎉 Data successfully committed directly back into your GitHub repository!")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error("Error executing repository commit file write.")
+
+# --- DISPLAY LOG LEDGER ---
+st.markdown("### 📋 Your Personal Log Ledger")
+if not user_df.empty:
+    st.dataframe(user_df[['log_date', 'odometer', 'liters', 'cost', 'Full Tank?', 'Air Checked', 'Service Cost']], use_container_width=True, hide_index=True)
+else:
+    st.info("Your repository fuel file is currently vacant.")
