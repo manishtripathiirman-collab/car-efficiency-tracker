@@ -248,7 +248,8 @@ if menu_tab:
                         Return output strictly formatted as JSON object with keys "liters" and "total_cost".
                         """
                         response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
-                        cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
+                        cleaned_text = response.text.replace("```json", "").replace("
+```", "").strip()
                         data = json.loads(cleaned_text)
                         
                         scanned_liters = float(data.get("liters", 0.0))
@@ -310,7 +311,6 @@ if menu_tab:
                         st.toast("✅ Cloud Synchronization Confirmed!", icon="🚀")
                         st.success(f"🎉 **Data successfully uploaded for {selected_date_str}!** Ledger entry logged under operator profile '{current_user.upper()}'.")
                         st.balloons()
-                        # Allow user to view confirmation metrics before screen refresh sequences occur
                         st.info("Refreshing local ledger matrices...")
                         st.rerun()
                     else:
