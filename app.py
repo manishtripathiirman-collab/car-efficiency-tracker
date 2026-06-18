@@ -95,7 +95,7 @@ for row in raw_cloud_data:
         
 user_df = pd.DataFrame(parsed_logs)
 
-# --- PERFORMANCE ANALYTICS MATH ENGINE (REPAIRED INTERVAL COST LOGIC) ---
+# --- PERFORMANCE ANALYTICS MATH ENGINE ---
 avg_mileage, cost_per_km = 0.0, 0.0
 if len(user_df) >= 2:
     user_df = user_df.sort_values("odometer").reset_index(drop=True)
@@ -119,6 +119,7 @@ if len(user_df) >= 2:
         avg_mileage = total_km / user_df['liters'].iloc[1:].sum() if user_df['liters'].iloc[1:].sum() > 0 else 0.0
         cost_per_km = user_df['cost'].iloc[1:].sum() / total_km if total_km > 0 else 0.0
 
+# --- MAIN DASHBOARD HEADER DISPLAY ---
 st.title(f"⚡ Welcome, {current_user.upper()}")
 st.markdown("### 📊 Your Performance Analytics")
 col_m1, col_m2 = st.columns(2)
@@ -133,3 +134,42 @@ with st.container(border=True):
     odometer = form_col1.number_input("Odometer Tracker (km)", min_value=0, step=1)
     liters = form_col2.number_input("Infused Volume (Liters)", min_value=0.0, step=0.1, format="%.2f")
     price = form_col2.number_input("Transaction Total Value (₹)", min_value=0.0, step=10.0)
+    
+    st.markdown("---")
+    m_col1, m_col2, m_col3 = st.columns(3)
+    full_tank_filled = m_col1.radio("Filled Fuel to Full Tank?", ["No", "Yes"], horizontal=True)
+    air_checked = m_col2.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
+    service_done = m_col3.radio("Vehicle Service Done?", ["No", "Yes"], horizontal=True)
+    
+    selected_date_str = log_date.strftime("%Y-%m-%d")
+    
+    if st.button("⚡ Commit Entry to GitHub Repository", use_container_width=True, type="primary"):
+        if selected_date_str in all_user_dates:
+            st.error(f"❌ Entry Blocked: You have already submitted fuel records for {selected_date_str}.")
+        elif odometer <= 0 or liters <= 0 or price <= 0:
+            st.error("Validation Halt: Readings must be set higher than zero.")
+        else:
+            notes_stamp = f" | Air: {air_checked} | Full Tank: {full_tank_filled}"
+            new_row = {
+                "user_id": f"{current_user}{notes_stamp}", 
+                "log_date": selected_date_str,
+                "odometer": int(odometer),
+                "liters": float(liters),
+                "cost": float(price)
+            }
+            raw_cloud_data.append(new_row)
+            
+            with st.spinner("Pushing record directly to GitHub file ledger..."):
+                if commit_to_github(raw_cloud_data, current_sha):
+                    st.success(f"🎉 Data successfully committed directly back into your GitHub repository!")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error("Error executing repository commit file write.")
+
+# --- DISPLAY LOG LEDGER ---
+st.markdown("### 📋 Your Personal Log Ledger")
+if not user_df.empty:
+    st.dataframe(user_df[['log_date', 'odometer', 'liters', 'cost', 'Full Tank?', 'Air Checked', 'Service Cost']], use_container_width=True, hide_index=True)
+else:
+    st.info("Your repository fuel file is currently vacant.")
