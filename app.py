@@ -152,7 +152,7 @@ if menu_tab:
     
     # Process metadata values stored inside user string parameters safely
     parsed_logs = []
-    all_user_dates = [] # Tracks logged transaction strings specifically for current operator duplication checking
+    all_user_dates = []
     
     for row in raw_cloud_data:
         uid = row.get("user_id", "")
@@ -248,10 +248,17 @@ if menu_tab:
                         Return output strictly formatted as JSON object with keys "liters" and "total_cost".
                         """
                         response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
-                        cleaned_text = response.text.replace("```json", "").replace("
-```", "").strip()
-                        data = json.loads(cleaned_text)
                         
+                        # Clean code formatting layers isolated step-by-step to prevent wrap truncation errors
+                        raw_ai_text = response.text
+                        json_pattern = "```json"
+                        tick_pattern = "```"
+                        
+                        cleaned_text = raw_ai_text.replace(json_pattern, "")
+                        cleaned_text = cleaned_text.replace(tick_pattern, "")
+                        cleaned_text = cleaned_text.strip()
+                        
+                        data = json.loads(cleaned_text)
                         scanned_liters = float(data.get("liters", 0.0))
                         scanned_price = float(data.get("total_cost", 0.0))
                         
@@ -287,7 +294,6 @@ if menu_tab:
         selected_date_str = log_date.strftime("%Y-%m-%d")
         
         if st.button("⚡ Commit Entry to Cloud Matrix", use_container_width=True, type="primary"):
-            # 🚨 DYNAMIC DAILY DUPLICATION PROTECTION INTERCEPTOR 🚨
             if selected_date_str in all_user_dates:
                 st.error(f"❌ Entry Blocked: You have already submitted fuel records for {selected_date_str}. To correct errors, delete today's previous entry from the ledger box below.")
             elif odometer <= 0 or liters <= 0 or price <= 0:
@@ -307,7 +313,6 @@ if menu_tab:
                 
                 with st.spinner("Pushing record payload to system matrices..."):
                     if commit_to_supabase("fuel_logs", new_entry_payload):
-                        # 🎉 VISUAL DATA CONFIRMATION GATEWAY 🎉
                         st.toast("✅ Cloud Synchronization Confirmed!", icon="🚀")
                         st.success(f"🎉 **Data successfully uploaded for {selected_date_str}!** Ledger entry logged under operator profile '{current_user.upper()}'.")
                         st.balloons()
@@ -409,11 +414,4 @@ if is_admin and admin_tab:
             )
             if st.button("Force Administrative Delete", type="primary", use_container_width=True):
                 if delete_from_supabase("fuel_logs", admin_row_to_delete["id"]):
-                    st.success(f"Administrative override successful. Row ID {admin_row_to_delete['id']} cleared.")
-                    st.rerun()
-                else:
-                    st.error("Admin Instruction Error: Could not delete row.")
-        else:
-            st.info("The global log grid is completely empty.")
-
-st.markdown("<br><br><div style='text-align: center; opacity: 0.2; font-size: 0.7rem;'>by mantri | strict integrity edition v5.2</div>", unsafe_allow_html=True)
+                    st.success(f"Administrative override successful. Row ID
