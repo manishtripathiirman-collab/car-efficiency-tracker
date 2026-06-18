@@ -17,10 +17,15 @@ st.markdown("""
             background-color: #ff4b4b !important; color: white !important;
             border: none !important; font-weight: bold !important;
             border-radius: 8px !important; padding: 0.5rem 1rem !important;
+            transition: all 0.3s ease;
+        }
+        div.stButton > button:first-child:hover {
+            background-color: #ff3333 !important; transform: scale(1.01);
         }
         [data-testid="stMetricContainer"] {
             background-color: #1a1f2c; border: 1px solid #2d3748;
             padding: 15px; border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -119,57 +124,49 @@ if len(user_df) >= 2:
         avg_mileage = total_km / user_df['liters'].iloc[1:].sum() if user_df['liters'].iloc[1:].sum() > 0 else 0.0
         cost_per_km = user_df['cost'].iloc[1:].sum() / total_km if total_km > 0 else 0.0
 
-# --- MAIN DASHBOARD HEADER DISPLAY ---
+# --- MAIN DASHBOARD DISPLAY ---
 st.title(f"⚡ Welcome, {current_user.upper()}")
 st.markdown("### 📊 Your Performance Analytics")
 col_m1, col_m2 = st.columns(2)
 col_m1.metric(label="📊 True Tank-to-Tank Mileage", value=f"{avg_mileage:.2f} km/L")
 col_m2.metric(label="💸 Your Running Cost", value=f"₹ {cost_per_km:.2f} / km")
 
-# --- DATA ENTRY FORM ---
-st.markdown("### ⛽ Step 1: Verify & Log Fuel Telemetry")
-with st.container(border=True):
-    form_col1, form_col2 = st.columns(2)
-    log_date = form_col1.date_input("Transaction Date Stamping", value=datetime.today())
-    odometer = form_col1.number_input("Odometer Tracker (km)", min_value=0, step=1)
-    liters = form_col2.number_input("Infused Volume (Liters)", min_value=0.0, step=0.1, format="%.2f")
-    price = form_col2.number_input("Transaction Total Value (₹)", min_value=0.0, step=10.0)
-    
-    st.markdown("---")
-    m_col1, m_col2, m_col3 = st.columns(3)
-    full_tank_filled = m_col1.radio("Filled Fuel to Full Tank?", ["No", "Yes"], horizontal=True)
-    air_checked = m_col2.radio("Air Pressure Calibrated?", ["No", "Yes"], horizontal=True)
-    service_done = m_col3.radio("Vehicle Service Done?", ["No", "Yes"], horizontal=True)
-    
-    selected_date_str = log_date.strftime("%Y-%m-%d")
-    
-    if st.button("⚡ Commit Entry to GitHub Repository", use_container_width=True, type="primary"):
-        if selected_date_str in all_user_dates:
-            st.error(f"❌ Entry Blocked: You have already submitted fuel records for {selected_date_str}.")
-        elif odometer <= 0 or liters <= 0 or price <= 0:
-            st.error("Validation Halt: Readings must be set higher than zero.")
-        else:
-            notes_stamp = f" | Air: {air_checked} | Full Tank: {full_tank_filled}"
-            new_row = {
-                "user_id": f"{current_user}{notes_stamp}", 
-                "log_date": selected_date_str,
-                "odometer": int(odometer),
-                "liters": float(liters),
-                "cost": float(price)
-            }
-            raw_cloud_data.append(new_row)
-            
-            with st.spinner("Pushing record directly to GitHub file ledger..."):
-                if commit_to_github(raw_cloud_data, current_sha):
-                    st.success(f"🎉 Data successfully committed directly back into your GitHub repository!")
-                    st.balloons()
-                    st.rerun()
-                else:
-                    st.error("Error executing repository commit file write.")
+# --- RESTORED CAMERA & FILE ATTACHMENT SCANNER ---
+st.markdown("### 📷 Step 1: Scan Bill via Vision AI")
+scanned_liters = 0.0
+scanned_price = 0.0
+target_bill_file = None
 
-# --- DISPLAY LOG LEDGER ---
-st.markdown("### 📋 Your Personal Log Ledger")
-if not user_df.empty:
-    st.dataframe(user_df[['log_date', 'odometer', 'liters', 'cost', 'Full Tank?', 'Air Checked', 'Service Cost']], use_container_width=True, hide_index=True)
-else:
-    st.info("Your repository fuel file is currently vacant.")
+with st.container(border=True):
+    cam_col, upload_col = st.columns(2, gap="small")
+    with cam_col:
+        st.markdown("**Option A: Camera Scanner**")
+        activate_camera = st.checkbox("Turn On Camera Hardware", value=False)
+        if activate_camera:
+            camera_snap = st.camera_input("Take live photo of receipt")
+            if camera_snap:
+                target_bill_file = camera_snap
+            
+    with upload_col:
+        st.markdown("**Option B: Document Upload**")
+        activate_upload = st.checkbox("Turn On File Attachment", value=False)
+        if activate_upload:
+            file_upload = st.file_uploader("Upload receipt image copy", type=["png", "jpg", "jpeg"])
+            if file_upload:
+                target_bill_file = file_upload
+
+    if target_bill_file is not None:
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        if not api_key:
+            st.error("⚠️ App Secret Missing: Please add 'GEMINI_API_KEY' to settings.")
+        else:
+            with st.spinner("⚡ AI is scanning document strings..."):
+                try:
+                    img = Image.open(target_bill_file)
+                    from google import genai
+                    client = genai.Client(api_key=api_key)
+                    prompt = """
+                    Examine this fuel receipt image carefully. Extract total volume in liters and total cost in Rupees. 
+                    Return output strictly formatted as JSON object with keys "liters" and "total_cost".
+                    """
+                    response = client.models.generate_content(model='gemini-2.5-flash', contents=[img, prompt])
