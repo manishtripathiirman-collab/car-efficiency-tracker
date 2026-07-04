@@ -12,5 +12,12 @@
         "odometer": 68402,
         "liters": 44.54,
         "cost": 4537.73
+    },
+    {
+        "user_id": "mantri | Air: No | Full Tank: Yes",
+        "log_date": "2026-07-03",
+        "odometer": 68827,
+        "liters": 43.95,
+        "cost": 4488.17
     }
 ]
